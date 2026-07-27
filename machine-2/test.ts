@@ -1,4 +1,4 @@
-import { convert, convertFrac, convertWhole, determineSign, normalize } from "./backend";
+import { convert, convertFrac, convertWhole, determineSign, normalize, buildBinary, buildHex, determineExponentBits } from "./backend";
 
 console.log(convert(1));        // +1. × 2^0
 console.log(convert(2));        // +1. × 2^1
@@ -25,3 +25,5 @@ console.log(convert(3.14));     // +1.10010 × 2^1
 // Larger values
 console.log(convert(10));       // +1.01 × 2^3
 console.log(convert(-8.75));    // -1.00011 × 2^3
+
+console.log(determineExponentBits(0, true));

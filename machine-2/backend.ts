@@ -45,8 +45,10 @@ export function convert(input: number) {
     let mantissa = new Array(precision).fill(0).slice(0, precision);
     const signString = signBit === 1 ? `-` : `+`;
     let leadDigit = `0`;
+    let edgeFlag = true;
 
     if (input !== 0) {
+        edgeFlag = false;
         convertedWhole = convertWhole(input);
         convertedFrac = convertFrac(input, precision);
         const res = normalize(convertedWhole, convertedFrac);
@@ -67,7 +69,7 @@ export function convert(input: number) {
         leadDigit = `1`;
     }
 
-    const binarybits = buildBinary(signBit, determineExponentBits(exponent), mantissa);
+    const binarybits = buildBinary(signBit, determineExponentBits(exponent, edgeFlag), mantissa);
 
     return {
         normalized: `${signString}${leadDigit}.${mantissa.join("")} X 2^${exponent}`,
@@ -76,9 +78,9 @@ export function convert(input: number) {
     };
 }
 
-export function determineExponentBits(exponent: number) {
+export function determineExponentBits(exponent: number, flag: boolean) {
     if (exponent > 127) return [1, 1, 1, 1, 1, 1, 1, 1];
-    if (exponent < -126) return [0, 0, 0, 0, 0, 0, 0, 0];
+    if (exponent < -126 || flag) return [0, 0, 0, 0, 0, 0, 0, 0];
     const ePrime = exponent + 127;
     const bits = convertWhole(ePrime);
     return new Array(8 - bits.length).fill(0).concat(bits);
