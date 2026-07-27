@@ -22,7 +22,7 @@ export function convertFrac(input: number, precision: number) {
     input = Math.abs(input);
     input = input % 1;
     const convertedFrac = [];
-    while (input !== 0 && convertedFrac.length < precision) {
+    while (input !== 0 && convertedFrac.length < precision + 8) {
         input *= 2;
         convertedFrac.push(Math.floor(input));
         input -= Math.trunc(input); 
@@ -42,7 +42,7 @@ export function convert(input: number) {
     let convertedWhole = new Array(precision).fill(0).slice(0, precision);
     let convertedFrac = new Array(precision).fill(0).slice(0, precision);
     let exponent = 0;
-    let mantissa = new Array(precision).fill(0).slice(0, precision);
+    let mantissa: number[] = new Array(precision).fill(0).slice(0, precision);
     const signString = signBit === 1 ? `-` : `+`;
     let leadDigit = `0`;
     let edgeFlag = true;
@@ -61,10 +61,20 @@ export function convert(input: number) {
         else if (exponent < -126) {
             mantissa.unshift(1);
             const shift = -(exponent + 126);
-            mantissa = new Array(shift).fill(0).concat(mantissa).slice(0, precision);
+            const padded = new Array(shift).fill(0).concat(mantissa);
+            const rounded = roundMantissa(padded);
+            mantissa = rounded.mantissa;
+            if (rounded.overflow) {
+                exponent = -126;
+            }
         }
         else {
-            mantissa = mantissa.concat(new Array(precision).fill(0)).slice(0, precision);
+            const padded = mantissa.concat(new Array(precision).fill(0));
+            const rounded = roundMantissa(padded);
+            mantissa = rounded.mantissa;
+            if (rounded.overflow) {
+                exponent++;
+            }
         }
         leadDigit = `1`;
     }
@@ -95,4 +105,39 @@ export function buildHex(binary: string) {
     const bits = binary.replaceAll(" ", "");
     const nibbles = bits.match(/.{1,4}/g) ?? [];
     return nibbles.map(n => parseInt(n, 2).toString(16).toUpperCase()).join("");
+}
+
+export function roundMantissa(raw: number[]) {
+    if (raw.length <= 23) return { mantissa: raw.concat(new Array(23).fill(0)).slice(0, 23), overflow: false };
+    const guard = raw[23];
+    if (guard === 0) return {  mantissa: raw.slice(0, 23), overflow: false };
+    if (raw.length <= 24) return { mantissa: raw.concat(new Array(23).fill(0)).slice(0, 23), overflow: false };
+
+    const round = raw[24];
+    if (round === 1) {
+        const mantissa = raw.slice(0, 23);
+        let carry = 1;
+        for (let i = 22; i >= 0; i--) {
+            const sum = mantissa[i] + carry;
+            mantissa[i] = sum % 2;
+            carry = Math.floor(sum / 2);
+            if (carry === 0) break;
+        }
+        return { mantissa, overflow: carry === 1 };
+    } 
+
+    const sticky = raw.slice(25).some(b => b === 1);
+    const shouldRoundUp = sticky || raw[22] === 1;
+    if (!shouldRoundUp) {
+        return { mantissa: raw.slice(0, 23), overflow: false };
+    }
+    const mantissa = raw.slice(0, 23);
+    let carry = 1;
+    for (let i = 22; i >= 0; i--) {
+        const sum = mantissa[i] + carry;
+        mantissa[i] = sum % 2;
+        carry = Math.floor(sum / 2);
+        if (carry === 0) break;
+    }
+    return { mantissa, overflow: carry === 1 };
 }
