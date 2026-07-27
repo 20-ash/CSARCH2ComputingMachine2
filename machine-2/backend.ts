@@ -22,13 +22,10 @@ export function convertFrac(input: number, precision: number) {
     input = Math.abs(input);
     input = input % 1;
     const convertedFrac = [];
-    if (input === 0) {
-        convertedFrac.push(0);
-    }
     while (input !== 0 && convertedFrac.length < precision) {
         input *= 2;
         convertedFrac.push(Math.floor(input));
-        input -= Math.floor(input); 
+        input -= Math.trunc(input); 
     }
     return convertedFrac;        
 }
@@ -40,21 +37,23 @@ export function normalize(whole: number[], frac: number[]) {
 }
 
 export function convert(input: number) {
+    const precision = 4;
     let signBit = 0;
     let convertedWhole = [0];
     let convertedFrac = [0];
     let exponent = 0;
-    let mantissa = [0];
+    let mantissa = new Array(precision).fill(0).slice(0, precision);
     let signString = `+`;
     let leadDigit = `0`;
 
     if (input !== 0) {
         signBit = determineSign(input);
         convertedWhole = convertWhole(input);
-        convertedFrac = convertFrac(input, 4);
+        convertedFrac = convertFrac(input, precision);
         const res = normalize(convertedWhole, convertedFrac);
         exponent = res.exponent;
         mantissa = res.mantissa;
+        mantissa = mantissa.concat(new Array(precision).fill(0)).slice(0, precision);
         signString = signBit === 1 ? `-` : `+`;
         leadDigit = `1`;
     }
