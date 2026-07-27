@@ -39,8 +39,8 @@ export function normalize(whole: number[], frac: number[]) {
 export function convert(input: number) {
     const precision = 23;
     const signBit = determineSign(input);
-    let convertedWhole = [0];
-    let convertedFrac = [0];
+    let convertedWhole = new Array(precision).fill(0).slice(0, precision);
+    let convertedFrac = new Array(precision).fill(0).slice(0, precision);
     let exponent = 0;
     let mantissa = new Array(precision).fill(0).slice(0, precision);
     const signString = signBit === 1 ? `-` : `+`;
@@ -60,7 +60,6 @@ export function convert(input: number) {
             mantissa.unshift(1);
             const shift = -(exponent + 126);
             mantissa = new Array(shift).fill(0).concat(mantissa).slice(0, precision);
-            exponent = -126;
         }
         else {
             mantissa = mantissa.concat(new Array(precision).fill(0)).slice(0, precision);
@@ -69,4 +68,12 @@ export function convert(input: number) {
     }
 
     return `${signString}${leadDigit}.${mantissa.join("")} X 2^${exponent}`;
+}
+
+export function determineExponentBits(exponent: number) {
+    if (exponent > 127) return [1, 1, 1, 1, 1, 1, 1, 1];
+    if (exponent < -126) return [0, 0, 0, 0, 0, 0, 0, 0];
+    const ePrime = exponent + 127;
+    const bits = convertWhole(ePrime);
+    return new Array(8 - bits.length).fill(0).concat(bits);
 }
