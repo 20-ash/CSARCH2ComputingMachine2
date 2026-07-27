@@ -37,24 +37,34 @@ export function normalize(whole: number[], frac: number[]) {
 }
 
 export function convert(input: number) {
-    const precision = 4;
-    let signBit = 0;
+    const precision = 23;
+    const signBit = determineSign(input);
     let convertedWhole = [0];
     let convertedFrac = [0];
     let exponent = 0;
     let mantissa = new Array(precision).fill(0).slice(0, precision);
-    let signString = `+`;
+    const signString = signBit === 1 ? `-` : `+`;
     let leadDigit = `0`;
 
     if (input !== 0) {
-        signBit = determineSign(input);
         convertedWhole = convertWhole(input);
         convertedFrac = convertFrac(input, precision);
         const res = normalize(convertedWhole, convertedFrac);
         exponent = res.exponent;
         mantissa = res.mantissa;
-        mantissa = mantissa.concat(new Array(precision).fill(0)).slice(0, precision);
-        signString = signBit === 1 ? `-` : `+`;
+
+        if (exponent > 127) {
+            mantissa = new Array(precision).fill(0).slice(0, precision);
+        }      
+        else if (exponent < -126) {
+            mantissa.unshift(1);
+            const shift = -(exponent + 126);
+            mantissa = new Array(shift).fill(0).concat(mantissa).slice(0, precision);
+            exponent = -126;
+        }
+        else {
+            mantissa = mantissa.concat(new Array(precision).fill(0)).slice(0, precision);
+        }
         leadDigit = `1`;
     }
 
