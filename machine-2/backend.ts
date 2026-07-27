@@ -67,9 +67,12 @@ export function convert(input: number) {
         leadDigit = `1`;
     }
 
+    const binarybits = buildBinary(signBit, determineExponentBits(exponent), mantissa);
+
     return {
         normalized: `${signString}${leadDigit}.${mantissa.join("")} X 2^${exponent}`,
-        binary: buildBinary(signBit, determineExponentBits(exponent), mantissa)
+        binary: binarybits,
+        hex: buildHex(binarybits)
     };
 }
 
@@ -83,5 +86,11 @@ export function determineExponentBits(exponent: number) {
 
 export function buildBinary(signBit: number, exponent: number[], mantissa: number[]) {
     const full = [String(signBit), ...exponent.map(String), ...mantissa.map(String)].join("");
-    return full.match(/.{1,4}/g)?.join(" ");
+    return full.match(/.{1,4}/g)?.join(" ") ?? "";
+}
+
+export function buildHex(binary: string) {
+    const bits = binary.replaceAll(" ", "");
+    const nibbles = bits.match(/.{1,4}/g) ?? [];
+    return nibbles.map(n => parseInt(n, 2).toString(16).toUpperCase()).join("");
 }
