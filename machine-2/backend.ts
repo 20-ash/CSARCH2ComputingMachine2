@@ -67,7 +67,10 @@ export function convert(input: number) {
         leadDigit = `1`;
     }
 
-    return `${signString}${leadDigit}.${mantissa.join("")} X 2^${exponent}`;
+    return {
+        normalized: `${signString}${leadDigit}.${mantissa.join("")} X 2^${exponent}`,
+        binary: buildBinary(signBit, determineExponentBits(exponent), mantissa)
+    };
 }
 
 export function determineExponentBits(exponent: number) {
@@ -76,4 +79,9 @@ export function determineExponentBits(exponent: number) {
     const ePrime = exponent + 127;
     const bits = convertWhole(ePrime);
     return new Array(8 - bits.length).fill(0).concat(bits);
+}
+
+export function buildBinary(signBit: number, exponent: number[], mantissa: number[]) {
+    const full = [String(signBit), ...exponent.map(String), ...mantissa.map(String)].join("");
+    return full.match(/.{1,4}/g)?.join(" ");
 }
