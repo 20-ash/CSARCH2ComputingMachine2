@@ -196,8 +196,10 @@ function findFirstSigFig(input: number[]) {
     return input.findIndex(d => d !== 0);   // finds first index that is not 0
 }
 
-// TRUNCATION
-// cuts off until target number of bits
+// --------------------------------------------------
+// TRUNCATION - cuts off until target number of bits
+
+// handles the truncation for binary numbers
 function truncateBinary(binaryInput: FormattedBinaryInput, targetBits: number) {
     // get index of first significant bit
     let firstSigBit = -1;
