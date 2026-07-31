@@ -278,3 +278,13 @@ export function truncateDec(input: number, targetDigits: number) {
 
     return Number(resultStr);   // convert back to number then return
 }
+
+// --------------------------------------------------
+// ROUND UP - rounds towards positive infinity
+
+// insert code here
+
+// --------------------------------------------------
+// ROUND DOWN - rounds towards negative infinity
+
+// insert code here
