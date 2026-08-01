@@ -288,3 +288,119 @@ export function truncateDec(input: number, targetDigits: number) {
 // ROUND DOWN - rounds towards negative infinity
 
 // insert code here
+
+
+// --------------------------------------------------
+// 3. Perform arithmetic operations (addition and multiplication) using rounding method
+// --------------------------------------------------
+
+// Unpack IEEE binary string (sign, exponent, mantissa)
+function unpackIEEE(binStr: string) {
+    const bits = binStr.replaceAll(" ", "");
+    return {
+        sign: parseInt(bits[0]),
+        exp: parseInt(bits.slice(1, 9), 2),
+        mant: [1, ...bits.slice(9).split("").map(Number)] // implicit leading 1 restored
+    };
+}
+
+// Pack back to IEEE 754 
+function packIEEE(sign: number, exp: number, mant: number[]) {
+    // drop implicit leading 1, round to 23 bits
+    const rounded = roundMantissa(mant.slice(1));
+    if (rounded.overflow) exp++;
+    const expBits = determineExponentBits(exp - 127, false);
+    return {
+        binary: buildBinary(sign, expBits, rounded.mantissa),
+        hex: buildHex(buildBinary(sign, expBits, rounded.mantissa))
+    };
+}
+
+// Perform addition
+export function ieeeAdd(a: number, b: number) {
+    // special cases first
+    if (isNaN(a) || isNaN(b)) return { result: NaN, binary: "NaN", hex: "NaN" };
+    if (!isFinite(a) || !isFinite(b)) {
+        if (Object.is(a, -Infinity) && Object.is(b, Infinity)) 
+            return { result: NaN, binary: "NaN", hex: "NaN" };
+        if (Object.is(a, Infinity) && Object.is(b, -Infinity)) 
+            return { result: NaN, binary: "NaN", hex: "NaN" };
+        return { result: a + b, binary: a > 0 ? "0 11111111 00000000000000000000000" : "1 11111111 00000000000000000000000", hex: a > 0 ? "7F800000" : "FF800000" };
+    }
+
+    const A = convert(a);
+    const B = convert(b);
+    const uA = unpackIEEE(A.binary);
+    const uB = unpackIEEE(B.binary);
+    let eA = uA.exp - 127, eB = uB.exp - 127;
+    let mA = [...uA.mant], mB = [...uB.mant];
+
+    // align exponents
+    if (eA > eB) {
+        mB = [0, ...mB.slice(0, - (eA - eB))];
+        eB = eA;
+    } else {
+        mA = [0, ...mA.slice(0, - (eB - eA))];
+        eA = eB;
+    }
+
+    // add/subtract mantissas based on sign
+    let signR = uA.sign;
+    let mantR: number[];
+    if (uA.sign === uB.sign) {
+        signR = uA.sign;
+        mantR = mA.map((v, i) => v + mB[i]);
+    } else {
+        signR = a > b ? uA.sign : uB.sign;
+        mantR = mA.map((v, i) => Math.abs(v - mB[i]));
+    }
+
+    // normalize
+    let first1 = mantR.findIndex(b => b === 1);
+    let expR = eA - first1;
+    mantR = mantR.slice(first1);
+    while (mantR.length < 24) mantR.push(0);
+
+    const packed = packIEEE(signR, expR + 127, mantR);
+    const dec = parseInt(packed.binary.replaceAll(" ", ""), 2);
+    return {
+        operands: { a: A, b: B },
+        stepByStep: "Unpack → align exponents → add mantissas → normalize → round → pack",
+        ...packed,
+        decimal: new Float32Array([dec])[0]
+    };
+}
+
+// Perform multiplication
+export function ieeeMul(a: number, b: number) {
+    if (isNaN(a) || isNaN(b)) 
+        return { result: NaN, binary: "NaN", hex: "NaN" };
+    if (a === 0 || b === 0) 
+        return { result: 0, binary: "0 00000000 00000000000000000000000", hex: "00000000" };
+    if (!isFinite(a) || !isFinite(b)) {
+        return { result: a * b, binary: (a*b > 0 ? "0" : "1") + " 11111111 00000000000000000000000", hex: (a*b > 0 ? "7F800000" : "FF800000") };
+    }
+
+    const A = convert(a);
+    const B = convert(b);
+    const uA = unpackIEEE(A.binary);
+    const uB = unpackIEEE(B.binary);
+    const signR = uA.sign ^ uB.sign;
+    const expR = (uA.exp - 127) + (uB.exp - 127) + 1;
+
+    // multiply mantissas (simplified bit product)
+    let mantissaR: number[] = [];
+    for (let i = 0; i < uA.mant.length; i++) {
+        if (uA.mant[i]) mantissaR = mantissaR.map((v,j) => v + (uB.mant[j]||0));
+    }
+    while (mantissaR.length < 24) mantissaR.push(0);
+
+    const packed = packIEEE(signR, expR + 127, mantissaR);
+    const dec = parseInt(packed.binary.replaceAll(" ", ""), 2);
+    return {
+        operands: { a: A, b: B },
+        stepByStep: "Unpack → XOR sign → debias exponents → multiply mantissas → normalize → round → pack",
+        ...packed,
+        decimal: new Float32Array([dec])[0]
+    };
+}

@@ -1,4 +1,4 @@
-import { convert, convertFrac, convertWhole, determineSign, normalize, buildBinary, buildHex, determineExponentBits } from "./backend";
+import { convert, convertFrac, convertWhole, determineSign, normalize, buildBinary, buildHex, determineExponentBits, ieeeAdd, ieeeMul } from "./backend";
 
 console.log(`Input 1: ${JSON.stringify(convert(1))}`);        // +1. × 2^0
 console.log(`Input 2: ${JSON.stringify(convert(2))}`);        // +1. × 2^1
@@ -25,3 +25,27 @@ console.log(`Input 3.14: ${JSON.stringify(convert(3.14))}`);
 // Larger values
 console.log(`Input 10: ${JSON.stringify(convert(10))}`);
 console.log(`Input -8.75: ${JSON.stringify(convert(-8.75))}`);
+
+
+// Addition
+console.log(`Add 1 + 1: ${JSON.stringify(ieeeAdd(1, 1))}`);
+console.log(`Add 1.5 + 2.5: ${JSON.stringify(ieeeAdd(1.5, 2.5))}`);
+console.log(`Add 0.5 + 0.25: ${JSON.stringify(ieeeAdd(0.5, 0.25))}`);
+console.log(`Add 6.25 + 3.75: ${JSON.stringify(ieeeAdd(6.25, 3.75))}`);
+console.log(`Add -1 + -1: ${JSON.stringify(ieeeAdd(-1, -1))}`);
+console.log(`Add 5 + -2.5: ${JSON.stringify(ieeeAdd(5, -2.5))}`);
+console.log(`Add 0.1 + 0.2: ${JSON.stringify(ieeeAdd(0.1, 0.2))}`);
+console.log(`Add 0 + 0: ${JSON.stringify(ieeeAdd(0, 0))}`);
+console.log(`Add -0 + 0: ${JSON.stringify(ieeeAdd(-0, 0))}`);
+console.log(`Add Infinity + 5: ${JSON.stringify(ieeeAdd(Infinity, 5))}`);
+console.log(`Add Infinity + -Infinity: ${JSON.stringify(ieeeAdd(Infinity, -Infinity))}`);
+
+// Multiplication
+console.log(`Mul 2 × 5: ${JSON.stringify(ieeeMul(2, 5))}`);
+console.log(`Mul 1.5 × 4: ${JSON.stringify(ieeeMul(1.5, 4))}`);
+console.log(`Mul 0.5 × 0.5: ${JSON.stringify(ieeeMul(0.5, 0.5))}`);
+console.log(`Mul -2 × -24: ${JSON.stringify(ieeeMul(-2, -24))}`);
+console.log(`Mul -3 × 2.25: ${JSON.stringify(ieeeMul(-3, 2.25))}`);
+console.log(`Mul 0 × 123.4567: ${JSON.stringify(ieeeMul(0, 123.4567))}`);
+console.log(`Mul Infinity × 2: ${JSON.stringify(ieeeMul(Infinity, 2))}`);
+console.log(`Mul 0 × Infinity: ${JSON.stringify(ieeeMul(0, Infinity))}`);
