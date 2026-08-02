@@ -236,6 +236,8 @@ function roundDec(decInput: number, targetDigits: number, method: string) {
     switch (method) {
         case "truncation":
             return truncateDec(decInput, targetDigits);
+        case "roundUp":
+            return roundUpDec(decInput, targetDigits);
     }
 }
 
@@ -390,7 +392,7 @@ function truncateDec(input: number, targetDigits: number) {
     if (absoluteInput < 1 && absoluteInput > 0) {
         const firstSigFig = fracPart.search(/[1-9]/);   // finds first non zero index
 
-        // return 0 if underflow / no sig figs
+        // return 0 if no sig figs
         if (firstSigFig === -1) 
             return 0;
 
@@ -407,6 +409,7 @@ function truncateDec(input: number, targetDigits: number) {
 // --------------------------------------------------
 // ROUND UP - rounds towards positive infinity
 
+// handles rounding up for binary numbers
 function roundUpBinary(binaryInput: FormattedBinaryInput, targetBits: number) {
     // if input is 0, return 0
     if (findFirstSigFig(binaryInput.magnitude) === -1)
@@ -459,6 +462,106 @@ function roundUpBinary(binaryInput: FormattedBinaryInput, targetBits: number) {
         magnitude: output,
         decimalPointIndex: outputDecimalPoint
     };
+}
+
+// handles rounding up for decimal numbers
+function roundUpDec(input: number, targetDigits: number) {
+    // return 0 if input is 0
+    if (input == 0)
+        return 0;
+
+    // since negative numbers round to positive infinity, then that also follows truncation rules
+    if (input < 0) {
+        return truncateDec(input, targetDigits);
+    }
+
+    const sign = input < 0 ? '-' : '';                // stores sign
+    const absoluteInput = Math.abs(input);            // gets absolute value of input
+    let formattedInput = absoluteInput.toString();    // convert to string
+
+    // prevents conversion to exponential notation
+    if (formattedInput.includes('e')) {
+        formattedInput = absoluteInput.toFixed(50).replace(/0+$/, '');
+    }
+
+    // splits integer and fractional part using decimal point
+    // if input has no decimal, fracPart is default empty string
+    const [intPart, fracPart = ''] = formattedInput.split('.');
+
+    // if input is a positive number greater than or equal to 1
+    if (input >= 1) {
+        // if integer part is enough for the target number of digits
+        if (intPart.length >= targetDigits) {
+            const keep = intPart.slice(0, targetDigits);
+            const disregard = intPart.slice(targetDigits) + fracPart;
+            
+            // checks if there are any non-zero digits in the remaining digits
+            // returns -1 if none
+            const hasNonZero = disregard.search(/[1-9]/);
+
+            // if there are non zero digits past the kept integers then need to increment by 1 per round up rules
+            if (hasNonZero !== -1) {
+                // increment by 1 to the kept digits
+                const incremented = (Number(keep) + 1).toString();
+                const zeroPadding = '0'.repeat(intPart.length - targetDigits);
+
+                // returns rounded up number after fixing the value and converting to Number
+                return Number(incremented + zeroPadding);
+            }
+
+            // if there are no more non zero digits past the kept integers then just pad zeros to
+            // fix the value then return after converting to Number
+            const zeroPadding = '0'.repeat(intPart.length - targetDigits);
+            return Number(keep + zeroPadding);
+        }
+
+        // if target digits spans until fractional part
+        const keepFracDigits = targetDigits - intPart.length;   // number of digits to keep in fractional part
+        const keepFrac = fracPart.slice(0, keepFracDigits);     // to keep fractional part
+
+        const disregard = fracPart.slice(keepFracDigits);   // fractional part to be disregarded
+
+        // checks if there are any non-zero digits in the remaining digits
+        // returns -1 if none
+        const hasNonZero = disregard.search(/[1-9]/);
+
+        if (hasNonZero !== -1) {
+            const scale = Math.pow(10, keepFracDigits);             // how much to scale number
+            const originalNum = Number(`${intPart}.${keepFrac}`);       // original number
+
+            // revert number back to original size then return
+            return Number(((originalNum * scale + 1) / scale).toFixed(keepFracDigits));
+        }
+
+        // rebuild number then return
+        return Number(`${intPart}.${keepFrac}`);
+    }
+
+    const firstSigFig = fracPart.search(/[1-9]/);
+    
+    // return 0 if no sig figs
+    if (firstSigFig === -1) 
+        return 0;
+
+    const cutIndex = firstSigFig + targetDigits;    // index where to cut
+    const keepFrac = fracPart.slice(0, cutIndex);   // to keep fractional part
+
+    const disregard = fracPart.slice(cutIndex);     // fractional part to be disregarded
+    
+    // checks if there are any non-zero digits in the remaining digits
+    // returns -1 if none
+    const hasNonZero = disregard.search(/[1-9]/);
+
+    if (hasNonZero !== -1) {
+        const scale = Math.pow(10, cutIndex);           // how much to scale number
+        const originalNum = Number(`0.${keepFrac}`);    // original number
+
+        // revert number back to original size then return
+        return Number(((originalNum * scale + 1) / scale).toFixed(cutIndex));
+    }
+
+    // rebuild number then return
+    return Number(`0.${keepFrac}`);
 }
 
 // --------------------------------------------------
