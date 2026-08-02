@@ -1,4 +1,8 @@
 'use server'
+
+import { sign } from "crypto";
+import { format } from "util";
+
 // --------------------------------------------------
 // 1. Convert decimal to binary single-precision
 // --------------------------------------------------
@@ -182,18 +186,138 @@ export function roundMantissa(raw: number[]) {
 // --------------------------------------------------
 // 2. Demonstrate rounding methods
 // --------------------------------------------------
-export type FormattedBinaryInput = {
+
+// custom data type for binary inputs
+type FormattedBinaryInput = {
     signed: boolean;            // true if signed binary and false if unsigned binary
-    signBit: number;            // 0 is positive and 1 is negative (useless if unsigned)
-    input: number[];            // input
+    signBit: number;            // 0 is positive and 1 is negative (-1 if unsigned)
+    magnitude: number[];        // magnitude
     decimalPointIndex: number;  // indicates at which index does the fractional part start in input
                                 // -1 if input is whole number
 };
 
+type ArithmeticBianryResult = {
+    arithmeticMagnitude: number[];      // magnitude
+    arithmeticPointIndex: number;       // indicates at which index does the fractional part start in input
+                                        // -1 if input is whole number
+}
+
+// --------------------------------------------------
+// MAIN ENTRANCE FOR ROUNDING METHODS
+
+// properly formats and converts user input depending on the input (binary or decimal)
+export function roundingMethods(inputStr: string, signedStr: string, signBitStr: string, method: string, target: string, type: string) {
+    const targetNum = Number(target);   // convert to number
+
+    // if number is in binary then it uses the binary rounding function
+    // if number is in decimal then it uses the decimal rounding function
+    if (type === "binary") {
+        const inputBinary = formatBinaryInput(inputStr, signedStr, signBitStr);
+        return roundBinary(inputBinary, targetNum, method);
+    }
+    else {
+        const inputDec = Number(inputStr);
+        return roundDec(inputDec, targetNum, method);
+    }
+}
+
+// directs to rounding method chosen by user (for binary inputs)
+function roundBinary(binaryInput: FormattedBinaryInput, targetBits: number, method: string) {
+    switch (method) {
+        case "truncation":
+            return truncateBinary(binaryInput, targetBits);
+        case "roundUp":
+            return roundUpBinary(binaryInput, targetBits);
+    }
+}
+
+// directs to rounding method chosen by user (for decimal inputs)
+function roundDec(decInput: number, targetDigits: number, method: string) {
+    switch (method) {
+        case "truncation":
+            return truncateDec(decInput, targetDigits);
+    }
+}
+
+// formats input to object type FormattedBinaryInput and returns object
+function formatBinaryInput(inputStr: string, signedStr: string, signbitStr: string) {
+    // indicate whether input is signed (true) or unsigned (false) binary
+    let signed = false;
+    if (signedStr === "signed")
+        signed = true;
+
+    // stores only the magnitude
+    let magnitude = inputStr;
+
+    // converts sign bit to number, defaults to -1 if unsigned
+    let signBit = signed ? Number(signbitStr) : -1;
+    
+    // determine the index of the decimal point
+    let decimalPointIndex = magnitude.indexOf(".");
+
+    // converts input to array of numbers for correct formatting
+    let result = [];
+    for (let i = 0; i < magnitude.length; i++) {
+        if (magnitude[i] !== ".") {
+            if (magnitude[i] === "0")
+                result.push(0);
+            else if (magnitude[i] === "1")
+                result.push(1);
+        }
+    }
+
+    // return object type FormattedBinaryInput
+    return {
+        signed: signed,
+        signBit: signBit,
+        magnitude: result,
+        decimalPointIndex: decimalPointIndex
+    };
+}
+
+// --------------------------------------------------
+// ROUNDING METHODS FUNCTIONS
+
+// HELPER FUNCTIONS for rounding methods
+
 // returns index of first significant figure of the number
 // returns -1 if number (whole array) is 0
 function findFirstSigFig(input: number[]) {
-    return input.findIndex(d => d !== 0);   // finds first index that is not 0
+    return input.findIndex(b => b !== 0);   // finds first index that is not 0
+}
+
+// adds trailing 0 to retain original place values
+function addTrailZero(output: number[], len: number) {
+    while (output.length < len)
+        output.push(0);
+
+    return output;
+}
+
+// return incremented binary number
+function incrementBinary(binaryNum: number[], pointIndex: number) {
+    let result = [...binaryNum];    // create a copy of the number
+    let carry = 1;                  // initialize to 1
+
+    // increments binary number
+    for (let i = binaryNum.length - 1; i >= 0; i--) {
+        let sumBit = result[i] + carry;
+        result[i] = sumBit % 2;
+        carry = Math.floor(sumBit / 2);
+    }
+
+    if (carry) {
+        result.unshift(1);
+        return {
+            arithmeticMagnitude: result,
+            arithmeticPointIndex: pointIndex === -1 ? -1 : pointIndex + 1
+        };
+    }
+
+    return {
+        arithmeticMagnitude: result,
+        arithmeticPointIndex: pointIndex
+    };
 }
 
 // --------------------------------------------------
@@ -206,33 +330,34 @@ function truncateBinary(binaryInput: FormattedBinaryInput, targetBits: number) {
     if (binaryInput.signed)
         firstSigBit = 0;    // if signed binary, first significant bit is always the sign bit
     else
-        firstSigBit = findFirstSigFig(binaryInput.input);     // if unsigned binary, first significant bit is the first 1 bit
+        firstSigBit = findFirstSigFig(binaryInput.magnitude);     // if unsigned binary, first significant bit is the first 1 bit
 
     // if input is 0, return 0
     if (firstSigBit === -1)
         return {
             ...binaryInput,
-            input: [...binaryInput.input]
+            magnitude: [...binaryInput.magnitude]
         };
 
     // if there are more target bits, then just return the original input since there is nothing to cut
-    const output = binaryInput.input.slice(0, targetBits + firstSigBit);
+    let output = binaryInput.magnitude.slice(0, targetBits + firstSigBit);
 
-    // adds trailing 0 if input has less bits as the target number of bits
-    while (output.length < (targetBits + firstSigBit)) {
-        output.push(0);
-    }
+    const origfracBitsCount = binaryInput.decimalPointIndex === -1 ? 0 : binaryInput.magnitude.length - binaryInput.decimalPointIndex;
+    const newLen = binaryInput.decimalPointIndex === -1 ? Math.max(output.length, binaryInput.magnitude.length) : binaryInput.decimalPointIndex + origfracBitsCount;
+
+    // adds trailing 0 to retain original place values
+    output = addTrailZero(output, newLen);
 
     // return truncated binary
     return {
         ...binaryInput,
-        input: output,
+        magnitude: output,
         decimalPointIndex: binaryInput.decimalPointIndex
     };
 }
 
 // handles the truncation for decimal numbers (including whole numbers and floats)
-export function truncateDec(input: number, targetDigits: number) {
+function truncateDec(input: number, targetDigits: number) {
     // return 0 if input is 0
     if (input == 0)
         return 0;
@@ -282,7 +407,59 @@ export function truncateDec(input: number, targetDigits: number) {
 // --------------------------------------------------
 // ROUND UP - rounds towards positive infinity
 
-// insert code here
+function roundUpBinary(binaryInput: FormattedBinaryInput, targetBits: number) {
+    // if input is 0, return 0
+    if (findFirstSigFig(binaryInput.magnitude) === -1)
+        return {
+            ...binaryInput,
+            magnitude: [...binaryInput.magnitude]
+        };
+
+    // get index of first significant bit
+    let firstSigBit = -1;
+    if (binaryInput.signed)
+        firstSigBit = 0;    // if signed binary, first significant bit is always the sign bit
+    else
+        firstSigBit = findFirstSigFig(binaryInput.magnitude);     // if unsigned binary, first significant bit is the first 1 bit
+
+    // bits after the target number of bits
+    const afterTarget = binaryInput.magnitude.slice(targetBits + firstSigBit, binaryInput.magnitude.length);
+
+    // checks if there are any 1 bits in the bits after the target
+    const hasOne = afterTarget.some(b => b === 1);
+
+    // if it does not have any 1 bits after the target, then do nothing
+    if (!hasOne) 
+        return {
+            ...binaryInput,
+            magnitude: [...binaryInput.magnitude]
+        };
+
+    // stores target bits
+    let output = [...binaryInput.magnitude];
+    output = output.slice(0, targetBits + firstSigBit);
+    let outputDecimalPoint = binaryInput.decimalPointIndex;
+
+    if (!binaryInput.signed || binaryInput.signBit === 0) {
+        let incrementedObj = incrementBinary(output, binaryInput.decimalPointIndex);
+        output = incrementedObj.arithmeticMagnitude;
+        outputDecimalPoint = incrementedObj.arithmeticPointIndex;
+    }
+
+    // computes new length if it was unshifted during incrementation
+    const origfracBitsCount = binaryInput.decimalPointIndex === -1 ? 0 : binaryInput.magnitude.length - binaryInput.decimalPointIndex;
+    const newLen = outputDecimalPoint === -1 ? output.length : outputDecimalPoint + origfracBitsCount;
+
+    // adds trailing 0 to retain original place values
+    output = addTrailZero(output, newLen);
+
+    // return rounded up binary
+    return {
+        ...binaryInput,
+        magnitude: output,
+        decimalPointIndex: outputDecimalPoint
+    };
+}
 
 // --------------------------------------------------
 // ROUND DOWN - rounds towards negative infinity
