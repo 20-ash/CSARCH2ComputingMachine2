@@ -8,7 +8,7 @@
 * Accept a decimal or a binary input along with the target number of bits for rounding. App outputs the various rounding operations via truncation, round-up, round-down, and round-to-nearest ties-to-even.
 * Accept two operands, either both decimal or  both IEEE hexadecimal then another input indicating the operation. App outputs the step-by-step solution in binary, hexadecimal, and decimal representations.
 
-### Implementation found in `backend.ts` (backend.ts)
+### Implementation found in `backend.ts`
 
 ## 2. Analysis Write-Up
 
