@@ -222,7 +222,6 @@ export default function RoundPage() {
 
             if (typeof val === "object" && val !== null) {
               if ("guardBit" in val) {
-                // Preserve full guard bit/digit string (e.g. "3" for decimal)
                 breakdown.roundBit = String(val.guardBit);
               }
               if ("stickyAny" in val) breakdown.stickyAny = Boolean(val.stickyAny);

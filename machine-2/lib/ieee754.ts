@@ -37,7 +37,7 @@ export interface Float32Breakdown {
   sourceSignificand: string;
 
   /** The bit immediately after the 23 kept mantissa bits */
-  roundBit: "0" | "1";
+  roundBit: string;
   /** Every bit after the round bit, OR'd together conceptually */
   stickyBits: string;
   stickyAny: boolean;
