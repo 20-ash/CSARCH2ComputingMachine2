@@ -3,13 +3,8 @@
 import React, { useEffect, useState } from "react";
 import PageShell from "@/components/PageShell";
 import BitField from "@/components/BitField";
-import {
-  roundFloat,
-  roundFloatCompare,
-  type RoundResponse,
-  type RoundCompareResponse,
-} from "@/lib/floatApi";
-import { ROUNDING_MODES, type RoundingMode } from "@/lib/ieee754";
+import { roundFloatCompare, type RoundCompareResponse } from "@/lib/floatApi";
+import { ROUNDING_MODES, type Float32Breakdown } from "@/lib/ieee754";
 
 /* ---------- input format handling ---------- */
 
@@ -142,8 +137,6 @@ function formatStoredValue(value: number, format: InputFormat, hex: string): str
 export default function RoundPage() {
   const [inputFormat, setInputFormat] = useState<InputFormat>("decimal");
   const [input, setInput] = useState(INPUT_FORMATS[0].default);
-  const [mode, setMode] = useState<RoundingMode>("nearest-even");
-  const [result, setResult] = useState<RoundResponse | null>(null);
   const [compare, setCompare] = useState<RoundCompareResponse | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
@@ -155,7 +148,6 @@ export default function RoundPage() {
     } catch (err) {
       setStatus("error");
       setErrorMsg(err instanceof Error ? err.message : "Invalid input.");
-      setResult(null);
       setCompare(null);
       return;
     }
@@ -163,10 +155,9 @@ export default function RoundPage() {
     let cancelled = false;
     setStatus("loading");
 
-    Promise.all([roundFloat({ decimal: value, mode }), roundFloatCompare({ decimal: value })])
-      .then(([r, c]) => {
+    roundFloatCompare({ decimal: value })
+      .then((c) => {
         if (cancelled) return;
-        setResult(r);
         setCompare(c);
         setStatus("idle");
       })
@@ -174,14 +165,13 @@ export default function RoundPage() {
         if (cancelled) return;
         setErrorMsg(err.message || "Rounding failed.");
         setStatus("error");
-        setResult(null);
         setCompare(null);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [input, mode, inputFormat]);
+  }, [input, inputFormat]);
 
   const activeFormat = INPUT_FORMATS.find((f) => f.id === inputFormat)!;
 
@@ -229,116 +219,65 @@ export default function RoundPage() {
         />
         <div style={helperStyle}>{activeFormat.helper}</div>
 
-        <label style={{ ...labelStyle, marginTop: 18 }}>Rounding mode</label>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {ROUNDING_MODES.map((m) => (
-            <button
-              key={m.id}
-              className="bfl-mode"
-              onClick={() => setMode(m.id)}
-              style={{
-                ...modeButtonStyle,
-                background: mode === m.id ? "#4B3F72" : "rgba(6,11,36,0.7)",
-                color: mode === m.id ? "#EAE3FF" : "#A9B3D6",
-                borderColor: mode === m.id ? "#7091df" : "rgba(143,166,217,0.3)",
-              }}
-              title={m.label}
-            >
-              {m.short}
-            </button>
-          ))}
-        </div>
-
         {status === "error" && <ErrorNote>{errorMsg}</ErrorNote>}
       </Card>
 
       {status === "loading" && <LoadingNote>Computing rounded representation…</LoadingNote>}
 
-      {status === "idle" && result && (
+      {status === "idle" && compare && (
         <>
           <Card>
-            <SectionTitle>{ROUNDING_MODES.find((m) => m.id === mode)?.label}</SectionTitle>
-            {result.specialCase && <SpecialCaseNote breakdown={result} />}
-            <div style={{ overflowX: "auto", padding: "4px 0 8px" }}>
-              <BitField
-                sign={result.sign}
-                exponentBits={result.exponentBits}
-                mantissaBits={result.mantissaBits}
-              />
-            </div>
-
-            {!result.specialCase && (
-              <div style={{ marginTop: 16 }}>
-                <div style={rowStyle}>
-                  <Stat label="Guard/round bit" value={result.roundBit} mono />
-                  <Stat label="Sticky (any 1s after)" value={result.stickyAny ? "yes" : "no"} mono />
-                  <Stat label="Rounded up?" value={result.roundedUp ? "yes" : "no"} mono />
-                  <Stat
-                    label={`Stored value (${activeFormat.label.toLowerCase()})`}
-                    value={formatStoredValue(result.storedValue, inputFormat, result.hex)}
-                    mono
-                  />
-                </div>
-                {result.mantissaCarried && (
-                  <ErrorNote>
-                    Rounding filled the mantissa to all 1s and carried into the exponent
-                    (23-bit overflow), so the exponent increased by 1.
-                  </ErrorNote>
-                )}
-              </div>
-            )}
-          </Card>
-
-          {compare && (
-            <Card>
-              <SectionTitle>Compare across modes</SectionTitle>
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr>
-                      {[`Mode`, `Stored value (${activeFormat.label.toLowerCase()})`, "Bit pattern", "Rounded up?"].map(
-                        (h) => (
-                          <th key={h} style={thStyle}>
-                            {h}
-                          </th>
-                        )
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ROUNDING_MODES.map((m) => {
-                      const r = compare.results[m.id];
-                      const active = m.id === mode;
-                      return (
-                        <tr
-                          key={m.id}
+            <SectionTitle>Compare across modes</SectionTitle>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>
+                    {[`Mode`, `Stored value (${activeFormat.label.toLowerCase()})`, "Bit pattern", "Rounded up?"].map(
+                      (h) => (
+                        <th key={h} style={thStyle}>
+                          {h}
+                        </th>
+                      )
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {ROUNDING_MODES.map((m) => {
+                    const r = compare.results[m.id];
+                    return (
+                      <tr key={m.id}>
+                        <td style={tdStyle}>{m.short}</td>
+                        <td style={{ ...tdStyle, fontFamily: "'JetBrains Mono', monospace" }}>
+                          {formatStoredValue(r.storedValue, inputFormat, r.hex)}
+                        </td>
+                        <td
                           style={{
-                            background: active ? "rgba(112,145,223,0.12)" : "transparent",
+                            ...tdStyle,
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 12,
+                            letterSpacing: 0.5,
                           }}
                         >
-                          <td style={tdStyle}>{m.short}</td>
-                          <td style={{ ...tdStyle, fontFamily: "'JetBrains Mono', monospace" }}>
-                            {formatStoredValue(r.storedValue, inputFormat, r.hex)}
-                          </td>
-                          <td
-                            style={{
-                              ...tdStyle,
-                              fontFamily: "'JetBrains Mono', monospace",
-                              fontSize: 12,
-                              letterSpacing: 0.5,
-                            }}
-                          >
-                            {r.fullBinary}
-                          </td>
-                          <td style={tdStyle}>{r.roundedUp ? "yes" : "no"}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
-          )}
+                          {r.fullBinary}
+                        </td>
+                        <td style={tdStyle}>{r.roundedUp ? "yes" : "no"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          {ROUNDING_MODES.map((m) => (
+            <ModeBreakdownCard
+              key={m.id}
+              label={m.label}
+              breakdown={compare.results[m.id]}
+              activeFormat={activeFormat}
+              inputFormat={inputFormat}
+            />
+          ))}
         </>
       )}
     </PageShell>
@@ -346,6 +285,53 @@ export default function RoundPage() {
 }
 
 /* ---------- presentational helpers (mirrors app/convert/page.tsx) ---------- */
+
+function ModeBreakdownCard({
+  label,
+  breakdown,
+  activeFormat,
+  inputFormat,
+}: {
+  label: string;
+  breakdown: Float32Breakdown;
+  activeFormat: (typeof INPUT_FORMATS)[number];
+  inputFormat: InputFormat;
+}) {
+  return (
+    <Card>
+      <SectionTitle>{label}</SectionTitle>
+      {breakdown.specialCase && <SpecialCaseNote breakdown={breakdown} />}
+      <div style={{ overflowX: "auto", padding: "4px 0 8px" }}>
+        <BitField
+          sign={breakdown.sign}
+          exponentBits={breakdown.exponentBits}
+          mantissaBits={breakdown.mantissaBits}
+        />
+      </div>
+
+      {!breakdown.specialCase && (
+        <div style={{ marginTop: 16 }}>
+          <div style={rowStyle}>
+            <Stat label="Guard/round bit" value={breakdown.roundBit} mono />
+            <Stat label="Sticky (any 1s after)" value={breakdown.stickyAny ? "yes" : "no"} mono />
+            <Stat label="Rounded up?" value={breakdown.roundedUp ? "yes" : "no"} mono />
+            <Stat
+              label={`Stored value (${activeFormat.label.toLowerCase()})`}
+              value={formatStoredValue(breakdown.storedValue, inputFormat, breakdown.hex)}
+              mono
+            />
+          </div>
+          {breakdown.mantissaCarried && (
+            <ErrorNote>
+              Rounding filled the mantissa to all 1s and carried into the exponent (23-bit
+              overflow), so the exponent increased by 1.
+            </ErrorNote>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
 
 function Card({ children }: { children: React.ReactNode }) {
   return (
@@ -425,7 +411,7 @@ function ErrorNote({ children }: { children: React.ReactNode }) {
   );
 }
 
-function SpecialCaseNote({ breakdown }: { breakdown: RoundResponse }) {
+function SpecialCaseNote({ breakdown }: { breakdown: Float32Breakdown }) {
   const messages: Record<string, string> = {
     zero: "This value stores as signed zero — exponent and mantissa are all zero.",
     overflow: "This magnitude is too large for float32 and stores as ±Infinity.",
