@@ -67,7 +67,7 @@ function getFloat64Parts(absValue: number) {
   return { exponentBiased, mantissaBits };
 }
 
-function bitsToFloat32(bits: string): number {
+export function bitsToFloat32(bits: string): number {
   const intVal = parseInt(bits, 2) >>> 0;
   const buf = new ArrayBuffer(4);
   const view = new DataView(buf);

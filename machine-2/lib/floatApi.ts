@@ -7,8 +7,8 @@
 // When the backend is ready, replace the two function
 // bodies below with real requests
 
-import { toFloat32Breakdown, type Float32Breakdown, type RoundingMode } from "./ieee754";
-import { ieeeAdd, ieeeMul } from "@/backend";
+import { toFloat32Breakdown, type Float32Breakdown, type RoundingMode, type SpecialCase, bitsToFloat32 } from "./ieee754";
+import { ieeeAdd, ieeeMul, convert } from "@/backend";
 
 export interface DecimalToBinaryRequest {
   decimal: number;
@@ -34,14 +34,53 @@ function simulateLatency(ms = 150) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function convertToBreakdown(input: number, conv: ReturnType<typeof convert>): Float32Breakdown {
+  const fullBinary = conv.binary.replaceAll(" ", "");
+  const sign = fullBinary[0] === "1" ? 1 : 0;
+  const exponentBits = fullBinary.slice(1, 9);
+  const mantissaBits = fullBinary.slice(9);
+
+  const exponentBiased = parseInt(exponentBits, 2);
+
+  let specialCase: SpecialCase = null;
+  if (exponentBits === "11111111") specialCase = "overflow";
+  else if (exponentBits === "00000000" && mantissaBits.includes("1")) specialCase = "underflow";
+  else if (exponentBits === "00000000") specialCase = "zero";
+  
+  const expMatch = /X 2\^(-?\d+)$/.exec(conv.normalized); 
+  const exponentUnbiased = expMatch ? Number(expMatch[1]) : exponentBiased - 127;
+
+  const storedValue = bitsToFloat32(fullBinary);
+
+  return {                                                 
+    input,
+    mode: "nearest-even",
+    sign,
+    exponentUnbiased,
+    exponentBiased,
+    exponentBits,
+    mantissaBits,
+    sourceSignificand: "1" + mantissaBits + "0".repeat(29), 
+    roundBit: "0",
+    stickyBits: "",
+    stickyAny: false,
+    roundedUp: false,
+    mantissaCarried: false,
+    fullBinary,
+    hex: "0x" + conv.hex,
+    storedValue,
+    specialCase,
+  };
+}
+
 export async function decimalToBinary(
   req: DecimalToBinaryRequest
 ): Promise<DecimalToBinaryResponse> {
-  await simulateLatency();
   if (!Number.isFinite(req.decimal)) {
     throw new Error("Enter a finite decimal number.");
   }
-  return toFloat32Breakdown(req.decimal, "nearest-even");
+  const conv = await convert(req.decimal);  
+  return convertToBreakdown(req.decimal, conv);
 }
 
 export async function roundFloat(req: RoundRequest): Promise<RoundResponse> {

@@ -41,6 +41,9 @@ export default function ConvertPage() {
     };
   }, [input]);
 
+  const isSubnormal =
+    !!result && result.exponentBits === "00000000" && result.mantissaBits.includes("1");
+
   return (
     <PageShell
       eyebrow="IEEE 754 · Single Precision"
@@ -82,17 +85,13 @@ export default function ConvertPage() {
               <Stat label="Hex" value={result.hex} mono />
               <Stat
                 label="Stored value"
-                value={
-                  Number.isFinite(result.storedValue)
-                    ? String(result.storedValue)
-                    : String(result.storedValue)
-                }
+                value={String(result.storedValue)}
                 mono
               />
             </div>
           </Card>
 
-          {!result.specialCase && (
+          {result.specialCase !== "zero" && result.specialCase !== "overflow" && (
             <Card>
               <SectionTitle>Step by step</SectionTitle>
               <Step n={1} title="Sign bit">
@@ -100,17 +99,29 @@ export default function ConvertPage() {
                   ? `The value is negative, so the sign bit is 1.`
                   : `The value is positive (or zero), so the sign bit is 0.`}
               </Step>
-              <Step n={2} title="Normalize to 1.mmmm × 2^e">
-                {`|${result.input}| in binary normalizes to 1.${result.sourceSignificand.slice(
-                  1,
-                  24
-                )}… × 2^${result.exponentUnbiased}.`}
+              <Step
+                n={2}
+                title={isSubnormal ? "Represent as a subnormal" : "Normalize to 1.mmmm × 2^e"}
+              >
+                {isSubnormal
+                  ? `|${result.input}| in binary is below the normal range, so it's stored as a subnormal: 0.${result.mantissaBits} × 2^-126.`
+                  : `|${result.input}| in binary normalizes to 1.${result.sourceSignificand.slice(
+                      1,
+                      24
+                    )}… × 2^${result.exponentUnbiased}.`}
               </Step>
-              <Step n={3} title="Bias the exponent">
-                {`Single precision stores the exponent with a bias of 127, so ${result.exponentUnbiased} + 127 = ${result.exponentBiased}, or ${result.exponentBits} in 8 bits.`}
+              <Step
+                n={3}
+                title={isSubnormal ? "Exponent field" : "Bias the exponent"}
+              >
+                {isSubnormal
+                  ? `Subnormals skip the usual biasing: the exponent field is all zeros (${result.exponentBits}), encoding the value as 0.mmm × 2^-126.`
+                  : `Single precision stores the exponent with a bias of 127, so ${result.exponentUnbiased} + 127 = ${result.exponentBiased}, or ${result.exponentBits} in 8 bits.`}
               </Step>
               <Step n={4} title="Keep 23 mantissa bits">
-                {`The bits after the leading "1." are kept up to 23 places: ${result.mantissaBits}. The implicit leading 1 is never stored — it's assumed.`}
+                {isSubnormal
+                  ? `Subnormals have no implicit leading 1 — the leading bit is 0, and all 23 mantissa bits are stored directly: ${result.mantissaBits}.`
+                  : `The bits after the leading "1." are kept up to 23 places: ${result.mantissaBits}. The implicit leading 1 is never stored — it's assumed.`}
               </Step>
               <Step n={5} title="Assemble the word">
                 {`sign + exponent + mantissa = ${result.fullBinary} (${result.hex}).`}
@@ -249,7 +260,7 @@ function SpecialCaseNote({ breakdown }: { breakdown: DecimalToBinaryResponse }) 
     zero: "This value stores as signed zero — exponent and mantissa are all zero.",
     overflow: "This magnitude is too large for float32 and stores as ±Infinity.",
     underflow:
-      "This magnitude is too small for float32's normal range. This tool simplifies subnormal values and stores it as ±0.",
+      "This magnitude is below float32's normal range and stores as a subnormal (leading 0s in the exponent)",
   };
   return <ErrorNote>{messages[breakdown.specialCase as string]}</ErrorNote>;
 }

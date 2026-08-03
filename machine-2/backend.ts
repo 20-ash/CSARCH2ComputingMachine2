@@ -1,8 +1,3 @@
-'use server'
-
-import { sign } from "crypto";
-import { format } from "util";
-
 // --------------------------------------------------
 // 1. Convert decimal to binary single-precision
 // --------------------------------------------------
@@ -40,7 +35,7 @@ export function convertFrac(input: number, precision: number) {
     const convertedFrac = [];
 
     // performs decimal to binary conversion for fractional part
-    while (input !== 0 && convertedFrac.length < precision + 8) {
+    while (input !== 0 && convertedFrac.length < precision + 8 + 127) {
         input *= 2;
         convertedFrac.push(Math.floor(input));
         input -= Math.trunc(input);
@@ -101,7 +96,7 @@ export function convert(input: number) {
             // restore the implicit leading 1 of the normalized form
             mantissa.unshift(1);
             // how far away is the exponent from the smallest limit of -126 for single precision
-            const shift = -(exponent + 126);
+            const shift = -(exponent + 127);
             // shift to the right until exponent becomes -126
             const padded = new Array(shift).fill(0).concat(mantissa);
             // perform rounding in case of excess bits
