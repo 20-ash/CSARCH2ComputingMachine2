@@ -11,8 +11,137 @@ import {
 } from "@/lib/floatApi";
 import { ROUNDING_MODES, type RoundingMode } from "@/lib/ieee754";
 
+/* ---------- input format handling ---------- */
+
+type InputFormat = "decimal" | "binary" | "ieee";
+
+const INPUT_FORMATS: {
+  id: InputFormat;
+  label: string;
+  placeholder: string;
+  helper: string;
+  default: string;
+}[] = [
+  {
+    id: "decimal",
+    label: "Decimal",
+    placeholder: "e.g. 0.1",
+    helper: "A base-10 number, e.g. 0.1 or -13.25",
+    default: "0.1",
+  },
+  {
+    id: "binary",
+    label: "Binary",
+    placeholder: "e.g. 1010.101 or -0.0011",
+    helper: "A base-2 fraction using only 0s and 1s, e.g. 0.0001100110011",
+    default: "0.0001100110011",
+  },
+  {
+    id: "ieee",
+    label: "IEEE-754 bits",
+    placeholder: "e.g. 3DCCCCCD or 0 01111011 10011001100110011010",
+    helper: "8 hex digits, or the 32 raw sign/exponent/mantissa bits",
+    default: "3DCCCCCD",
+  },
+];
+
+/** Parses a fixed-point binary string ("-101.011") into a decimal number. */
+function parseBinaryToDecimal(raw: string): number {
+  const str = raw.trim();
+  if (str === "") throw new Error("Enter a binary value.");
+
+  const match = /^([+-]?)((?:[01]+)?)(?:\.([01]*))?$/.exec(str);
+  if (!match || (match[2] === "" && (match[3] ?? "") === "")) {
+    throw new Error("Binary input can only contain 0, 1, and one decimal point (e.g. -101.011).");
+  }
+
+  const [, signPart, intPart, fracPart = ""] = match;
+  const sign = signPart === "-" ? -1 : 1;
+
+  let value = 0;
+  for (const digit of intPart) {
+    value = value * 2 + (digit === "1" ? 1 : 0);
+  }
+
+  let scale = 0.5;
+  for (const digit of fracPart) {
+    if (digit === "1") value += scale;
+    scale /= 2;
+  }
+
+  return sign * value;
+}
+
+/** Parses either 32 raw IEEE-754 bits or 8 hex digits into the decimal value they encode. */
+function parseIeeeToDecimal(raw: string): number {
+  const cleaned = raw.trim().replace(/^0x/i, "").replace(/\s+/g, "");
+  if (cleaned === "") throw new Error("Enter an IEEE-754 bit pattern.");
+
+  let uint32: number;
+  if (/^[01]{32}$/.test(cleaned)) {
+    uint32 = parseInt(cleaned, 2) >>> 0;
+  } else if (/^[0-9a-fA-F]{8}$/.test(cleaned)) {
+    uint32 = parseInt(cleaned, 16) >>> 0;
+  } else {
+    throw new Error("IEEE-754 input needs exactly 32 bits (0/1) or 8 hex digits.");
+  }
+
+  const buf = new ArrayBuffer(4);
+  const view = new DataView(buf);
+  view.setUint32(0, uint32, false);
+  return view.getFloat32(0, false);
+}
+
+/** Converts a user's raw text (in the given format) into the decimal value the API expects. */
+function inputToDecimal(raw: string, format: InputFormat): number {
+  if (format === "decimal") {
+    const value = Number(raw);
+    if (raw.trim() === "" || Number.isNaN(value)) {
+      throw new Error("Enter a valid decimal number.");
+    }
+    return value;
+  }
+  if (format === "binary") return parseBinaryToDecimal(raw);
+  return parseIeeeToDecimal(raw);
+}
+
+/** Converts a stored float value to an exact fixed-point binary string. Float32 values that
+ * come from this tool always terminate within a bounded number of fractional bits. */
+function decimalToBinaryString(value: number): string {
+  if (Number.isNaN(value)) return "NaN";
+  if (!Number.isFinite(value)) return value > 0 ? "Infinity" : "-Infinity";
+  if (value === 0) return Object.is(value, -0) ? "-0" : "0";
+
+  const sign = value < 0 ? "-" : "";
+  let abs = Math.abs(value);
+  const intPart = Math.floor(abs);
+  let fracPart = abs - intPart;
+
+  let fracStr = "";
+  let guard = 0;
+  while (fracPart > 0 && guard < 200) {
+    fracPart *= 2;
+    const bit = fracPart >= 1 ? 1 : 0;
+    fracStr += String(bit);
+    fracPart -= bit;
+    guard++;
+  }
+
+  return sign + intPart.toString(2) + (fracStr ? "." + fracStr : "");
+}
+
+/** Formats a stored decimal value in whichever format the user chose as their input.
+ * `hex` is the breakdown's own precomputed IEEE-754 hex string (already 0x-prefixed,
+ * 8 uppercase hex digits) — reused as-is rather than re-derived on the frontend. */
+function formatStoredValue(value: number, format: InputFormat, hex: string): string {
+  if (format === "decimal") return String(value);
+  if (format === "binary") return decimalToBinaryString(value);
+  return hex;
+}
+
 export default function RoundPage() {
-  const [input, setInput] = useState("0.1");
+  const [inputFormat, setInputFormat] = useState<InputFormat>("decimal");
+  const [input, setInput] = useState(INPUT_FORMATS[0].default);
   const [mode, setMode] = useState<RoundingMode>("nearest-even");
   const [result, setResult] = useState<RoundResponse | null>(null);
   const [compare, setCompare] = useState<RoundCompareResponse | null>(null);
@@ -20,10 +149,12 @@ export default function RoundPage() {
   const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
-    const value = Number(input);
-    if (input.trim() === "" || Number.isNaN(value)) {
+    let value: number;
+    try {
+      value = inputToDecimal(input, inputFormat);
+    } catch (err) {
       setStatus("error");
-      setErrorMsg("Enter a valid decimal number.");
+      setErrorMsg(err instanceof Error ? err.message : "Invalid input.");
       setResult(null);
       setCompare(null);
       return;
@@ -50,7 +181,9 @@ export default function RoundPage() {
     return () => {
       cancelled = true;
     };
-  }, [input, mode]);
+  }, [input, mode, inputFormat]);
+
+  const activeFormat = INPUT_FORMATS.find((f) => f.id === inputFormat)!;
 
   return (
     <PageShell
@@ -59,18 +192,42 @@ export default function RoundPage() {
       description="Most decimals don't fit exactly in 23 mantissa bits. See the guard, round, and sticky bits a rounding mode actually looks at, and how the choice of mode changes the stored value."
     >
       <Card>
+        <label style={labelStyle}>Input format</label>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
+          {INPUT_FORMATS.map((f) => (
+            <button
+              key={f.id}
+              className="bfl-mode"
+              onClick={() => {
+                setInputFormat(f.id);
+                setInput(f.default);
+              }}
+              style={{
+                ...modeButtonStyle,
+                background: inputFormat === f.id ? "#4B3F72" : "rgba(6,11,36,0.7)",
+                color: inputFormat === f.id ? "#EAE3FF" : "#A9B3D6",
+                borderColor: inputFormat === f.id ? "#7091df" : "rgba(143,166,217,0.3)",
+              }}
+              title={f.label}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
         <label style={labelStyle} htmlFor="decimal-input">
-          Decimal input
+          {activeFormat.label} input
         </label>
         <input
           id="decimal-input"
           className="bfl-field"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          inputMode="decimal"
-          placeholder="e.g. 0.1"
+          inputMode={inputFormat === "decimal" ? "decimal" : "text"}
+          placeholder={activeFormat.placeholder}
           style={inputStyle}
         />
+        <div style={helperStyle}>{activeFormat.helper}</div>
 
         <label style={{ ...labelStyle, marginTop: 18 }}>Rounding mode</label>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -116,7 +273,11 @@ export default function RoundPage() {
                   <Stat label="Guard/round bit" value={result.roundBit} mono />
                   <Stat label="Sticky (any 1s after)" value={result.stickyAny ? "yes" : "no"} mono />
                   <Stat label="Rounded up?" value={result.roundedUp ? "yes" : "no"} mono />
-                  <Stat label="Stored value" value={String(result.storedValue)} mono />
+                  <Stat
+                    label={`Stored value (${activeFormat.label.toLowerCase()})`}
+                    value={formatStoredValue(result.storedValue, inputFormat, result.hex)}
+                    mono
+                  />
                 </div>
                 {result.mantissaCarried && (
                   <ErrorNote>
@@ -135,11 +296,13 @@ export default function RoundPage() {
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
                     <tr>
-                      {["Mode", "Stored value", "Bit pattern", "Rounded up?"].map((h) => (
-                        <th key={h} style={thStyle}>
-                          {h}
-                        </th>
-                      ))}
+                      {[`Mode`, `Stored value (${activeFormat.label.toLowerCase()})`, "Bit pattern", "Rounded up?"].map(
+                        (h) => (
+                          <th key={h} style={thStyle}>
+                            {h}
+                          </th>
+                        )
+                      )}
                     </tr>
                   </thead>
                   <tbody>
@@ -155,7 +318,7 @@ export default function RoundPage() {
                         >
                           <td style={tdStyle}>{m.short}</td>
                           <td style={{ ...tdStyle, fontFamily: "'JetBrains Mono', monospace" }}>
-                            {String(r.storedValue)}
+                            {formatStoredValue(r.storedValue, inputFormat, r.hex)}
                           </td>
                           <td
                             style={{
@@ -279,6 +442,12 @@ const labelStyle: React.CSSProperties = {
   textTransform: "uppercase",
   letterSpacing: 0.5,
   marginBottom: 8,
+};
+
+const helperStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: "#7C86AD",
+  marginTop: 6,
 };
 
 const inputStyle: React.CSSProperties = {
