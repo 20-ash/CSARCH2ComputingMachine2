@@ -68,6 +68,8 @@ export function normalize(whole: number[], frac: number[]) {
 // orchestrator function that assembles all of the individual function pieces to perform the conversion.
 // returns the normalized (was used for debugging), IEEE binary, and IEEE hexadecimal representation of the input decimal.
 export function convert(input: number) {
+    // initialization assumes the input is 0 first
+    // precision is used to adjust how many digits should the mantissa have
     const precision = 23;
     const signBit = determineSign(input);
     let convertedWhole = new Array(precision).fill(0).slice(0, precision);
@@ -76,9 +78,12 @@ export function convert(input: number) {
     let mantissa: number[] = new Array(precision).fill(0).slice(0, precision);
     const signString = signBit === 1 ? `-` : `+`;
     let leadDigit = `0`;
+    // edgeFlag tells determineExponentBits() if the input is 0
     let edgeFlag = true;
 
+    // we see the input is not 0
     if (input !== 0) {
+        // we now mark the flag as false to make sure determineExponentBits() know this isn't the 0 input edge case
         edgeFlag = false;
         convertedWhole = convertWhole(input);
         convertedFrac = convertFrac(input, precision);
@@ -86,78 +91,110 @@ export function convert(input: number) {
         exponent = res.exponent;
         mantissa = res.mantissa;
 
+        // this is the infinity case, we set entire mantissa to 0's
+        // determineExponentBits() will handle the exponent bits field 
         if (exponent > 127) {
             mantissa = new Array(precision).fill(0).slice(0, precision);
-        }      
+        }    
+        // we hit the denormalized form of an incredibly small number  
         else if (exponent < -126) {
+            // restore the implicit leading 1 of the normalized form
             mantissa.unshift(1);
+            // how far away is the exponent from the smallest limit of -126 for single precision
             const shift = -(exponent + 126);
+            // shift to the right until exponent becomes -126
             const padded = new Array(shift).fill(0).concat(mantissa);
+            // perform rounding in case of excess bits
             const rounded = roundMantissa(padded);
             mantissa = rounded.mantissa;
+            // this overflow exists in case of a wrap around between -127 -> -126 sending an input back into the normalized range
             if (rounded.overflow) {
                 exponent = -126;
             }
         }
+        // hitting this line means the input is not an edge case
         else {
+            // pad to the 23 bit precision for the roundedMantissa() function to work
             const padded = mantissa.concat(new Array(precision).fill(0));
             const rounded = roundMantissa(padded);
             mantissa = rounded.mantissa;
+            // we now must adjust the exponent due to the rounding spilling over, this handles a normalized form of 1.11111 something
             if (rounded.overflow) {
                 exponent++;
             }
         }
+        // this is the non-zero input branch so our leading digit is automatically 1 on the normalized form
         leadDigit = `1`;
     }
 
+    // we now construct the binary representation of the entire decimal input
     const binarybits = buildBinary(signBit, determineExponentBits(exponent, edgeFlag), mantissa);
 
     return {
+        // we build the normalized form into a string based on the initialization and adjustments from the start of convert()
         normalized: `${signString}${leadDigit}.${mantissa.join("")} X 2^${exponent}`,
         binary: binarybits,
         hex: buildHex(binarybits)
     };
 }
 
+// takes in the exponent determined by the normalize function to compute for the exponent bits field
+// flag is there to tell this function that the input is a 0
 export function determineExponentBits(exponent: number, flag: boolean) {
+    // we hit the infinitt case, we return all 1's for the exponent field
     if (exponent > 127) 
         return [1, 1, 1, 1, 1, 1, 1, 1];
 
+    // we hit the denormalized form or the input is 0, we just return all 0's for the exponent bits field
     if (exponent < -126 || flag) 
         return [0, 0, 0, 0, 0, 0, 0, 0];
 
+    // we calculate e prime then reuse convertWhole() to turn the eprime bits into binary
     const ePrime = exponent + 127;
     const bits = convertWhole(ePrime);
 
+    // pad to the left with 0's to ensure exponent field matches the 8 bits requirement
     return new Array(8 - bits.length).fill(0).concat(bits);
 }
 
+// receives the signbit, the exponent number array holding the binary version of e prime, and the number array holding the mantissa
+// uses these parameters and concatenates all of them into a single array to be mapped and converted into a string.
 export function buildBinary(signBit: number, exponent: number[], mantissa: number[]) {
     const full = [String(signBit), ...exponent.map(String), ...mantissa.map(String)].join("");
+    // spaces the arrays to make sure after every 4 digits, they are concatenated with a space
     return full.match(/.{1,4}/g)?.join(" ") ?? "";
 }
 
+// takes in the string generated from buildBinary and then maps every 4 binary digits into a hex digit
 export function buildHex(binary: string) {
     const bits = binary.replaceAll(" ", "");
+    // we group up the bits into nibbles first
     const nibbles = bits.match(/.{1,4}/g) ?? [];
+    // we converted every nibble entry into their corresponding hex digit
     return nibbles.map(n => parseInt(n, 2).toString(16).toUpperCase()).join("");
 }
 
 // takes in a binary number
 // performs round to nearest, ties to even
+// overflow flag is there to tell convert later if the exponent value needs to be adjusted due to the rounding
 export function roundMantissa(raw: number[]) {
-    // if has less than 23 bits, pad with 0 then return
+    // if has less than or equal to 23 bits, pad with 0 then return
     if (raw.length <= 23) 
         return { mantissa: raw.concat(new Array(23).fill(0)).slice(0, 23), overflow: false };
     
+    // we now know we have enough bits for rounding, now we set the 24th bit as the guard bit 
     const guard = raw[23];
+    // if guard is 0, we know rounding here is going to floor
     if (guard === 0) 
         return {  mantissa: raw.slice(0, 23), overflow: false };
 
+    // we do another check if there is a bit past the guard, if this fails, we return the mantissa flooring it to 23 bits
     if (raw.length <= 24) 
         return { mantissa: raw.concat(new Array(23).fill(0)).slice(0, 23), overflow: false };
 
+    // this sets the 25th bit as the round bit
     const round = raw[24];
+    // if round is 1, it's going to be a ceiling, so now we begin incrementing the mantissa
     if (round === 1) {
         const mantissa = raw.slice(0, 23);
         let carry = 1;
@@ -165,17 +202,28 @@ export function roundMantissa(raw: number[]) {
             const sum = mantissa[i] + carry;
             mantissa[i] = sum % 2;
             carry = Math.floor(sum / 2);
+            // this break means we encountered a case of a carry over from a previous addition NOT resulting in a carry over on the current digit
             if (carry === 0) break;
         }
+        // we now return the adjusted mantissa
+        // overflow will be true if the incrementation overflowed the most significant bit of the mantissa
         return { mantissa, overflow: carry === 1 };
     } 
 
+    // if reaching this line, guard = 0, round = 0, sticky = about to be determined
+
+    // sticky bit, we just take 26th bit onward and find if there is a 1 somewhere there
     const sticky = raw.slice(25).some(b => b === 1);
+    // flag to determine if we should increment
+    // if the 23rd is a 1, this is a ties to even situation
+    // if sticky is true, we know this is not ties to even and is greater than half 
     const shouldRoundUp = sticky || raw[22] === 1;
     if (!shouldRoundUp) {
+        // if not true from above, we do not round up, we simply truncate
         return { mantissa: raw.slice(0, 23), overflow: false };
     }
     const mantissa = raw.slice(0, 23);
+    // this is the same mantissa incrementation process seen in the round bit section earlier
     let carry = 1;
     for (let i = 22; i >= 0; i--) {
         const sum = mantissa[i] + carry;
@@ -183,6 +231,7 @@ export function roundMantissa(raw: number[]) {
         carry = Math.floor(sum / 2);
         if (carry === 0) break;
     }
+    // we now return the incremented mantissa after determining sticky bit is 1. Now tell convert() to increment exponent
     return { mantissa, overflow: carry === 1 };
 }
 
