@@ -196,7 +196,7 @@ type FormattedBinaryInput = {
                                 // -1 if input is whole number
 };
 
-type ArithmeticBianryResult = {
+type ArithmeticBinaryResult = {
     arithmeticMagnitude: number[];      // magnitude
     arithmeticPointIndex: number;       // indicates at which index does the fractional part start in input
                                         // -1 if input is whole number
@@ -209,15 +209,19 @@ type ArithmeticBianryResult = {
 export function roundingMethods(inputStr: string, signedStr: string, signBitStr: string, method: string, target: string, type: string) {
     const targetNum = Number(target);   // convert to number
 
-    // if number is in binary then it uses the binary rounding function
-    // if number is in decimal then it uses the decimal rounding function
+    // if number is in binary then it uses the binary rounding functions
+    // if number is in decimal then it uses the decimal rounding functions
+    // if number is in ieee then it uses the binary rounding functions (adjust input to only include magnitude)
     if (type === "binary") {
         const inputBinary = formatBinaryInput(inputStr, signedStr, signBitStr);
         return roundBinary(inputBinary, targetNum, method);
-    }
-    else {
+    } else if (type === "decimal") {
         const inputDec = Number(inputStr);
         return roundDec(inputDec, targetNum, method);
+    } else if (type === "ieee") {
+        // only pass the magnitude part of the ieee number
+        let inputIEEE = formatBinaryInput(inputStr.slice(9), signedStr, signBitStr);
+        return roundBinary(inputIEEE, targetNum, method);
     }
 }
 
@@ -230,7 +234,8 @@ function roundBinary(binaryInput: FormattedBinaryInput, targetBits: number, meth
             return roundUpBinary(binaryInput, targetBits);
         case "roundDown":
             return roundDownBinary(binaryInput, targetBits);
-        // case "roundNearest":
+        case "roundNearest":
+            return roundNearBinary(binaryInput, targetBits);
     }
 }
 
@@ -618,10 +623,13 @@ function roundDownBinary(binaryInput: FormattedBinaryInput, targetBits: number) 
             ...binaryInput,
             magnitude: [...binaryInput.magnitude]
         };
+    
+    // index where to cut the number
+    const cutIndex = targetBits + firstSigBit;
 
     // stores target bits
     let output = [...binaryInput.magnitude];
-    output = output.slice(0, targetBits + firstSigBit);
+    output = output.slice(0, cutIndex);
     let outputDecimalPoint = binaryInput.decimalPointIndex;
 
     // increment for negative numbers since round down means towards negative infinity
@@ -748,6 +756,82 @@ function roundDownDec(input: number, targetDigits: number) {
 
 // --------------------------------------------------
 // ROUND TO NEAREST, TIES TO EVEN - rounds to nearest (up or down) and even if tie (in the middle)
+
+// handles round to nearest, ties to even for binary numbers
+function roundNearBinary(binaryInput: FormattedBinaryInput, targetBits: number) {
+    // if input is 0, return 0
+    if (findFirstSigFig(binaryInput.magnitude) === -1)
+        return {
+            ...binaryInput,
+            magnitude: [...binaryInput.magnitude]
+        };
+
+    // get index of first significant bit
+    let firstSigBit = -1;
+    if (binaryInput.signed)
+        firstSigBit = 0;    // if signed binary, first significant bit is always the sign bit
+    else
+        firstSigBit = findFirstSigFig(binaryInput.magnitude);     // if unsigned binary, first significant bit is the first 1 bit
+
+    // index where to cut the number
+    const cutIndex = targetBits + firstSigBit;
+
+    // stores target bits
+    let output = [...binaryInput.magnitude];
+    output = output.slice(0, cutIndex);
+    let outputDecimalPoint = binaryInput.decimalPointIndex;
+
+    // check if there are bits after the target cut
+    if (cutIndex < binaryInput.magnitude.length) {
+        // last kept bit (L)
+        const lastKeptBit = output[output.length - 1];
+
+        // guard bit (G)
+        // first bit after cut
+        const guardBit = binaryInput.magnitude[cutIndex];
+
+        // sticky bits (S)
+        // OR all bits after guard bit
+        const stickyBits = binaryInput.magnitude.slice(cutIndex + 1);
+        const hasStickyBit = stickyBits.some(b => b === 1);
+
+        // indicator for increment number or not
+        let shouldIncrement = false;
+
+        // round to nearest, ties to even logic
+        if (guardBit === 1) {
+            // if fraction is greater then the midpoint then round up
+            if (hasStickyBit)
+                shouldIncrement = true;
+            else {
+                // if exactly halfway then round to nearest even bit
+                if (lastKeptBit === 1)
+                    shouldIncrement = true;
+            }
+        }
+
+        // incrementing logic
+        if (shouldIncrement) {
+            let incrementedObj = incrementBinary(output, binaryInput.decimalPointIndex);
+            output = incrementedObj.arithmeticMagnitude;
+            outputDecimalPoint = incrementedObj.arithmeticPointIndex;
+        }
+    }
+
+    // computes new length if it was unshifted during incrementation
+    const origfracBitsCount = binaryInput.decimalPointIndex === -1 ? 0 : binaryInput.magnitude.length - binaryInput.decimalPointIndex;
+    const newLen = outputDecimalPoint === -1 ? output.length : outputDecimalPoint + origfracBitsCount;
+
+    // adds trailing 0 to retain original place values
+    output = addTrailZero(output, newLen);
+
+    // return rounded down binary
+    return {
+        ...binaryInput,
+        magnitude: output,
+        decimalPointIndex: outputDecimalPoint
+    };
+}
 
 // handles round to nearest, ties to even for decimal numbers
 function roundNearDec(input: number, targetDigits: number) {
