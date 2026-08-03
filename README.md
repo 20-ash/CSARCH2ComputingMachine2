@@ -10,7 +10,9 @@
 
 ### Implementation found in `backend.ts` (backend.ts)
 
-## 2. Conversion Methods
+## 2. Analysis Write-Up
+
+### 2.1. Conversion Methods
 
 | Stage | Function | Responsibility |
 |---|---|---|
@@ -22,18 +24,18 @@
 | Exponent encode | `determineExponentBits` | Adds bias 127; handles subnormal (all 0s) and infinity (all 1s) |
 | Assemble | `buildBinary` / `buildHex` | Concatenates 1+8+23 bits, formats in nibbles, converts to hex |
 
-## 3. Rounding Methods
+### 2.2. Rounding Methods
 
 The backend implements two rounding modes for both binary and decimal inputs:
 - **Truncation** (`truncateBinary` / `truncateDec`): drops all bits/digits beyond the target precision, toward zero.
 - **Round up** (`roundUpBinary` / `roundUpDec`): rounds toward positive infinity; negative values follow truncation rules for rounding toward positive infinity.
 
-## 4. Arithmetic Methods
+### 2.3. Arithmetic Methods
 
 `ieeeAdd` and `ieeeMul` implement IEEE 754 addition and multiplication by unpacking the 32-bit operands, performing the operation on mantissas and exponents, then rounding and repacking.
 **Addition pipeline:** unpack → align exponents (shift smaller mantissa right) → add/subtract mantissas → normalize → round → pack.
 **Multiplication pipeline:** unpack → XOR sign bits → add (debias) exponents → multiply mantissas → normalize → round → pack.
 
-## 5. Test Results
+## 3. Test Results
 
 WE APPEND OUR SCREENSHOTS AND VIDEOS HERE LATER.
