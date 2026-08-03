@@ -36,6 +36,10 @@ The backend implements two rounding modes for both binary and decimal inputs:
 **Addition pipeline:** unpack → align exponents (shift smaller mantissa right) → add/subtract mantissas → normalize → round → pack.
 **Multiplication pipeline:** unpack → XOR sign bits → add (debias) exponents → multiply mantissas → normalize → round → pack.
 
-## 3. Test Results
+## 3. Screenshots
 
-WE APPEND OUR SCREENSHOTS AND VIDEOS HERE LATER.
+WE APPEND OUR SCREENSHOTS.
+
+## 4. Video Walkthrough
+
+WE APPEND OUR VIDEO.
