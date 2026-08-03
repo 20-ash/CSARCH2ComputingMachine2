@@ -1,4 +1,4 @@
-'use server'
+// 'use server'
 
 import { sign } from "crypto";
 import { format } from "util";
@@ -228,9 +228,6 @@ function roundBinary(binaryInput: FormattedBinaryInput, targetBits: number, meth
             return truncateBinary(binaryInput, targetBits);
         case "roundUp":
             return roundUpBinary(binaryInput, targetBits);
-        case "roundDown":
-            return roundDownBinary(binaryInput, targetBits);
-        // case "roundNearest":
     }
 }
 
@@ -241,10 +238,6 @@ function roundDec(decInput: number, targetDigits: number, method: string) {
             return truncateDec(decInput, targetDigits);
         case "roundUp":
             return roundUpDec(decInput, targetDigits);
-        case "roundDown":
-            return roundDownDec(decInput, targetDigits);
-        case "roundNearest":
-            return roundNearDec(decInput, targetDigits);
     }
 }
 
@@ -327,22 +320,6 @@ function incrementBinary(binaryNum: number[], pointIndex: number) {
         arithmeticMagnitude: result,
         arithmeticPointIndex: pointIndex
     };
-}
-
-// helper function for dealing with round to nearest logic
-function roundNearJudge(input: number, targetDigits: number, disregard: number, half: number, lastKeepDigit: number) {
-    if (disregard > half) {
-        return roundUpDec(input, targetDigits);         // if higher than half, then round up
-    } else if (disregard < half) {
-        return roundDownDec(input, targetDigits);       // if lower than half, then round down
-    } else {
-        // if exactly half
-        if (lastKeepDigit % 2 !== 0) {
-            return roundUpDec(input, targetDigits);     // if odd, then round up to even
-        } else {
-            return truncateDec(input, targetDigits);    // if already even, then truncate
-        }
-    }
 }
 
 // --------------------------------------------------
@@ -466,8 +443,7 @@ function roundUpBinary(binaryInput: FormattedBinaryInput, targetBits: number) {
     output = output.slice(0, targetBits + firstSigBit);
     let outputDecimalPoint = binaryInput.decimalPointIndex;
 
-    // increments for positive numbers since round up means towards positive infinity
-    if (binaryInput.signed || binaryInput.signBit === 0) {
+    if (!binaryInput.signed || binaryInput.signBit === 0) {
         let incrementedObj = incrementBinary(output, binaryInput.decimalPointIndex);
         output = incrementedObj.arithmeticMagnitude;
         outputDecimalPoint = incrementedObj.arithmeticPointIndex;
@@ -499,6 +475,7 @@ function roundUpDec(input: number, targetDigits: number) {
         return truncateDec(input, targetDigits);
     }
 
+    const sign = input < 0 ? '-' : '';                // stores sign
     const absoluteInput = Math.abs(input);            // gets absolute value of input
     let formattedInput = absoluteInput.toString();    // convert to string
 
@@ -511,8 +488,8 @@ function roundUpDec(input: number, targetDigits: number) {
     // if input has no decimal, fracPart is default empty string
     const [intPart, fracPart = ''] = formattedInput.split('.');
 
-    // if input is neither in between 1 and -1
-    if (absoluteInput >= 1) {
+    // if input is a positive number greater than or equal to 1
+    if (input >= 1) {
         // if integer part is enough for the target number of digits
         if (intPart.length >= targetDigits) {
             const keep = intPart.slice(0, targetDigits);
@@ -590,238 +567,8 @@ function roundUpDec(input: number, targetDigits: number) {
 // --------------------------------------------------
 // ROUND DOWN - rounds towards negative infinity
 
-// handles rounding down for binary numbers
-function roundDownBinary(binaryInput: FormattedBinaryInput, targetBits: number) {
-    // if input is 0, return 0
-    if (findFirstSigFig(binaryInput.magnitude) === -1)
-        return {
-            ...binaryInput,
-            magnitude: [...binaryInput.magnitude]
-        };
+// insert code here
 
-    // get index of first significant bit
-    let firstSigBit = -1;
-    if (binaryInput.signed)
-        firstSigBit = 0;    // if signed binary, first significant bit is always the sign bit
-    else
-        firstSigBit = findFirstSigFig(binaryInput.magnitude);     // if unsigned binary, first significant bit is the first 1 bit
-
-    // bits after the target number of bits
-    const afterTarget = binaryInput.magnitude.slice(targetBits + firstSigBit, binaryInput.magnitude.length);
-
-    // checks if there are any 1 bits in the bits after the target
-    const hasOne = afterTarget.some(b => b === 1);
-
-    // if it does not have any 1 bits after the target, then do nothing
-    if (!hasOne) 
-        return {
-            ...binaryInput,
-            magnitude: [...binaryInput.magnitude]
-        };
-
-    // stores target bits
-    let output = [...binaryInput.magnitude];
-    output = output.slice(0, targetBits + firstSigBit);
-    let outputDecimalPoint = binaryInput.decimalPointIndex;
-
-    // increment for negative numbers since round down means towards negative infinity
-    if (binaryInput.signed && binaryInput.signBit === 1) {
-        let incrementedObj = incrementBinary(output, binaryInput.decimalPointIndex);
-        output = incrementedObj.arithmeticMagnitude;
-        outputDecimalPoint = incrementedObj.arithmeticPointIndex;
-    }
-
-    // computes new length if it was unshifted during incrementation
-    const origfracBitsCount = binaryInput.decimalPointIndex === -1 ? 0 : binaryInput.magnitude.length - binaryInput.decimalPointIndex;
-    const newLen = outputDecimalPoint === -1 ? output.length : outputDecimalPoint + origfracBitsCount;
-
-    // adds trailing 0 to retain original place values
-    output = addTrailZero(output, newLen);
-
-    // return rounded down binary
-    return {
-        ...binaryInput,
-        magnitude: output,
-        decimalPointIndex: outputDecimalPoint
-    };
-}
-
-// handles rounding down for decimal numbers
-function roundDownDec(input: number, targetDigits: number) {
-    // return 0 if input is 0
-    if (input == 0)
-        return 0;
-
-    // since positive numbers round to negative infinity, then that also follows truncation rules
-    if (input > 0) {
-        return truncateDec(input, targetDigits);
-    }
-
-    const absoluteInput = Math.abs(input);            // gets absolute value of input
-    let formattedInput = absoluteInput.toString();    // convert to string
-
-    // prevents conversion to exponential notation
-    if (formattedInput.includes('e')) {
-        formattedInput = absoluteInput.toFixed(50).replace(/0+$/, '');
-    }
-
-    // splits integer and fractional part using decimal point
-    // if input has no decimal, fracPart is default empty string
-    const [intPart, fracPart = ''] = formattedInput.split('.');
-
-    // if input is neither in between 1 and -1
-    if (absoluteInput <= -1) {
-        // if integer part is enough for the target number of digits
-        if (intPart.length >= targetDigits) {
-            const keep = intPart.slice(0, targetDigits);
-            const disregard = intPart.slice(targetDigits) + fracPart;
-            
-            // checks if there are any non-zero digits in the remaining digits
-            // returns -1 if none
-            const hasNonZero = disregard.search(/[1-9]/);
-
-            // if there are non zero digits past the kept integers then need to increment by 1 per round up rules
-            if (hasNonZero !== -1) {
-                // increment by 1 to the kept digits
-                const incremented = (Number(keep) + 1).toString();
-                const zeroPadding = '0'.repeat(intPart.length - targetDigits);
-
-                // returns rounded up number after fixing the value and converting to Number (negated)
-                return -Number(incremented + zeroPadding);
-            }
-
-            // if there are no more non zero digits past the kept integers then just pad zeros to
-            // fix the value then return after converting to Number (negated)
-            const zeroPadding = '0'.repeat(intPart.length - targetDigits);
-            return -Number(keep + zeroPadding);
-        }
-
-        // if target digits spans until fractional part
-        const keepFracDigits = targetDigits - intPart.length;   // number of digits to keep in fractional part
-        const keepFrac = fracPart.slice(0, keepFracDigits);     // to keep fractional part
-
-        const disregard = fracPart.slice(keepFracDigits);   // fractional part to be disregarded
-
-        // checks if there are any non-zero digits in the remaining digits
-        // returns -1 if none
-        const hasNonZero = disregard.search(/[1-9]/);
-
-        if (hasNonZero !== -1) {
-            const scale = Math.pow(10, keepFracDigits);             // how much to scale number
-            const originalNum = Number(`${intPart}.${keepFrac}`);       // original number
-
-            // revert number back to original size then return (negated)
-            return -Number(((originalNum * scale + 1) / scale).toFixed(keepFracDigits));
-        }
-
-        // rebuild number then return (negated)
-        return -Number(`${intPart}.${keepFrac}`);
-    }
-
-    const firstSigFig = fracPart.search(/[1-9]/);
-    
-    // return 0 if no sig figs
-    if (firstSigFig === -1) 
-        return 0;
-
-    const cutIndex = firstSigFig + targetDigits;    // index where to cut
-    const keepFrac = fracPart.slice(0, cutIndex);   // to keep fractional part
-
-    // fractional part to be disregarded
-    const disregard = fracPart.slice(cutIndex);
-    
-    // checks if there are any non-zero digits in the remaining digits
-    // returns -1 if none
-    const hasNonZero = disregard.search(/[1-9]/);
-
-    if (hasNonZero !== -1) {
-        const scale = Math.pow(10, cutIndex);           // how much to scale number
-        const originalNum = Number(`0.${keepFrac}`);    // original number
-
-        // revert number back to original size then return (negated)
-        return -Number(((originalNum * scale + 1) / scale).toFixed(cutIndex));
-    }
-
-    // rebuild number then return (negated)
-    return -Number(`0.${keepFrac}`);
-}
-
-// --------------------------------------------------
-// ROUND TO NEAREST, TIES TO EVEN - rounds to nearest (up or down) and even if tie (in the middle)
-
-// handles round to nearest, ties to even for decimal numbers
-function roundNearDec(input: number, targetDigits: number) {
-    // return 0 if input is 0
-    if (input == 0)
-        return 0;
-
-    const absoluteInput = Math.abs(input);            // gets absolute value of input
-    let formattedInput = absoluteInput.toString();    // convert to string
-
-    // prevents conversion to exponential notation
-    if (formattedInput.includes('e')) {
-        formattedInput = absoluteInput.toFixed(50).replace(/0+$/, '');
-    }
-
-    // splits integer and fractional part using decimal point
-    // if input has no decimal, fracPart is default empty string
-    const [intPart, fracPart = ''] = formattedInput.split('.');
-
-    // if input is a positive number greater than or equal to 1
-    if (absoluteInput >= 1) {
-        if (intPart.length >= targetDigits) {
-            // get keep part and its last digit
-            const keepStr = intPart.slice(0, targetDigits);
-            const lastKeepDigit = Number(keepStr[keepStr.length - 1]);
-
-            // get drop part
-            const dropStr = intPart.slice(targetDigits);
-            const disregard = Number(`${dropStr}.${fracPart}`);
-
-            // compute for midpoint
-            const dropIntLength = dropStr.length;
-            const half = 5 * Math.pow(10, dropIntLength - 1);
-
-            // evaluate round to nearest, ties to even logic and return rounded value
-            return roundNearJudge(input, targetDigits, disregard, half, lastKeepDigit);
-        } else {
-            // get keep part and its last digit
-            const neededFracDigits = targetDigits - intPart.length;
-            const keepFracStr = fracPart.slice(0, neededFracDigits);
-            
-            // get last digit of the kept part of the number
-            const fullKeptStr = intPart + keepFracStr;
-            const lastKeepDigit = Number(fullKeptStr[fullKeptStr.length - 1]);
-
-            // get drop part
-            const dropFracStr = fracPart.slice(neededFracDigits);
-            const disregard = Number(`0.${dropFracStr}`);
-            
-            // midpoint always 0.5 for this case
-            const half = 0.5;
-
-            // evaluate round to nearest, ties to even logic and return rounded value
-            return roundNearJudge(input, targetDigits, disregard, half, lastKeepDigit);
-        }
-    } else {
-        // find first non zero digit
-        const firstSigFig = fracPart.search(/[1-9]/);
-
-        // extract significant digits
-        const keepFracStr = fracPart.slice(firstSigFig, firstSigFig + targetDigits);
-        const lastKeepDigit = Number(keepFracStr[keepFracStr.length - 1]);
-
-        // get drop part
-        const dropFracStr = fracPart.slice(firstSigFig + targetDigits);
-        const disregard = Number(`0.${dropFracStr}`);
-
-        // midpoint always 0.5 for this case
-        const half = 0.5;
-
-        // evaluate round to nearest, ties to even logic and return rounded value
-        return roundNearJudge(input, targetDigits, disregard, half, lastKeepDigit);
-    }
-}
 
 // --------------------------------------------------
 // 3. Perform arithmetic operations (addition and multiplication) using rounding method
