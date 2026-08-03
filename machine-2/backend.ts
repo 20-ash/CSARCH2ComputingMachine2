@@ -64,6 +64,9 @@ export function normalize(whole: number[], frac: number[]) {
     return { exponent: -(first + 1), mantissa: frac.slice(first + 1) };
 }
 
+
+// orchestrator function that assembles all of the individual function pieces to perform the conversion.
+// returns the normalized (was used for debugging), IEEE binary, and IEEE hexadecimal representation of the input decimal.
 export function convert(input: number) {
     const precision = 23;
     const signBit = determineSign(input);
