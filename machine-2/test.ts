@@ -1,4 +1,4 @@
-import { convert, convertFrac, convertWhole, determineSign, normalize, buildBinary, buildHex, determineExponentBits, ieeeAdd, ieeeMul } from "./backend";
+import { convert, convertFrac, convertWhole, determineSign, normalize, buildBinary, buildHex, determineExponentBits, roundingMethods, ieeeAdd, ieeeMul } from "./backend";
 
 console.log(`Input 1: ${JSON.stringify(convert(1))}`);        // +1. × 2^0
 console.log(`Input 2: ${JSON.stringify(convert(2))}`);        // +1. × 2^1
@@ -26,6 +26,12 @@ console.log(`Input 3.14: ${JSON.stringify(convert(3.14))}`);
 console.log(`Input 10: ${JSON.stringify(convert(10))}`);
 console.log(`Input -8.75: ${JSON.stringify(convert(-8.75))}`);
 
+
+// rounding
+// inputStr: string, signedStr: string, signBitStr: string, method: string, target: string, type: string
+console.log(`Input 1: ${JSON.stringify(roundingMethods("123456", "signed", "0", "truncation", "2", "decimal"))}`);
+console.log(`Input 1: ${JSON.stringify(roundingMethods("0.000123456", "signed", "0", "truncation", "2", "decimal"))}`);
+console.log(`Input 1: ${JSON.stringify(roundingMethods("011011", "signed", "0", "truncation", "2", "binary"))}`);
 
 // Addition
 console.log(`Add 1 + 1: ${JSON.stringify(ieeeAdd(1, 1))}`);

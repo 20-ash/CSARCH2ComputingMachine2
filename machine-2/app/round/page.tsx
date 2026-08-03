@@ -3,8 +3,8 @@
 import React, { useEffect, useState } from "react";
 import PageShell from "@/components/PageShell";
 import BitField from "@/components/BitField";
-import { roundFloatCompare, type RoundCompareResponse } from "@/lib/floatApi";
-import { ROUNDING_MODES, type Float32Breakdown } from "@/lib/ieee754";
+import { roundFloatCompare, computeCustomRounding, type RoundCompareResponse } from "@/lib/floatApi";
+import { ROUNDING_MODES, toFloat32Breakdown, type Float32Breakdown, type RoundingMode } from "@/lib/ieee754";
 
 /* ---------- input format handling ---------- */
 
@@ -100,8 +100,7 @@ function inputToDecimal(raw: string, format: InputFormat): number {
   return parseIeeeToDecimal(raw);
 }
 
-/** Converts a stored float value to an exact fixed-point binary string. Float32 values that
- * come from this tool always terminate within a bounded number of fractional bits. */
+/** Converts a stored float value to an exact fixed-point binary string. */
 function decimalToBinaryString(value: number): string {
   if (Number.isNaN(value)) return "NaN";
   if (!Number.isFinite(value)) return value > 0 ? "Infinity" : "-Infinity";
@@ -114,7 +113,8 @@ function decimalToBinaryString(value: number): string {
 
   let fracStr = "";
   let guard = 0;
-  while (fracPart > 0 && guard < 200) {
+  
+  while (fracPart > 1e-15 && guard < 53) {
     fracPart *= 2;
     const bit = fracPart >= 1 ? 1 : 0;
     fracStr += String(bit);
@@ -125,10 +125,16 @@ function decimalToBinaryString(value: number): string {
   return sign + intPart.toString(2) + (fracStr ? "." + fracStr : "");
 }
 
-/** Formats a stored decimal value in whichever format the user chose as their input.
- * `hex` is the breakdown's own precomputed IEEE-754 hex string (already 0x-prefixed,
- * 8 uppercase hex digits) — reused as-is rather than re-derived on the frontend. */
-function formatStoredValue(value: number, format: InputFormat, hex: string): string {
+/** Formats a stored decimal value in whichever format the user chose as their input. */
+function formatStoredValue(
+  value: number, 
+  format: InputFormat, 
+  hex: string, 
+  breakdown?: Float32Breakdown
+): string {
+  if (breakdown && (breakdown as any).customBinaryString && format === "binary") {
+    return (breakdown as any).customBinaryString;
+  }
   if (format === "decimal") return String(value);
   if (format === "binary") return decimalToBinaryString(value);
   return hex;
@@ -137,17 +143,18 @@ function formatStoredValue(value: number, format: InputFormat, hex: string): str
 export default function RoundPage() {
   const [inputFormat, setInputFormat] = useState<InputFormat>("decimal");
   const [input, setInput] = useState(INPUT_FORMATS[0].default);
+  const [targetBits, setTargetBits] = useState<string>("23");
   const [compare, setCompare] = useState<RoundCompareResponse | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
-    let value: number;
-    try {
-      value = inputToDecimal(input, inputFormat);
-    } catch (err) {
+    if (!input.trim()) return;
+
+    const parsedTarget = Number(targetBits);
+    if (!targetBits || Number.isNaN(parsedTarget) || parsedTarget < 1) {
       setStatus("error");
-      setErrorMsg(err instanceof Error ? err.message : "Invalid input.");
+      setErrorMsg("Please enter a valid target integer.");
       setCompare(null);
       return;
     }
@@ -155,23 +162,136 @@ export default function RoundPage() {
     let cancelled = false;
     setStatus("loading");
 
-    roundFloatCompare({ decimal: value })
-      .then((c) => {
-        if (cancelled) return;
-        setCompare(c);
-        setStatus("idle");
-      })
-      .catch((err: Error) => {
-        if (cancelled) return;
-        setErrorMsg(err.message || "Rounding failed.");
+    if (inputFormat === "decimal" || inputFormat === "binary") {
+      const isNegative = input.trim().startsWith("-");
+      const signBit = isNegative ? "1" : "0";
+      
+      const cleanInput = inputFormat === "binary" 
+        ? input.trim().replace(/^[+-]/, "") 
+        : input.trim();
+
+      computeCustomRounding(cleanInput, "signed", signBit, targetBits, inputFormat)
+        .then((res: any) => {
+          if (cancelled || !res) return;
+
+          const binaryObjToString = (obj: any): string => {
+            if (typeof obj === "string" || typeof obj === "number") return String(obj);
+            if (!obj) return "0";
+
+            const mag: number[] = obj.arithmeticMagnitude ?? obj.magnitude ?? [];
+            const pointIdx: number = obj.arithmeticPointIndex ?? obj.decimalPointIndex ?? -1;
+            const sign = isNegative ? "-" : "";
+
+            if (mag.length === 0) return "0";
+
+            if (pointIdx === -1) {
+              return sign + mag.join("");
+            }
+
+            if (pointIdx >= mag.length) {
+              return sign + mag.join("") + "0".repeat(pointIdx - mag.length);
+            }
+
+            const intPart = mag.slice(0, pointIdx).join("") || "0";
+            const fracPart = mag.slice(pointIdx).join("");
+            return `${sign}${intPart}${fracPart ? "." + fracPart : ""}`;
+          };
+
+          const buildBreakdown = (val: any, mode: RoundingMode): Float32Breakdown => {
+            if (val === undefined || val === null) return toFloat32Breakdown(0, mode, parsedTarget);
+
+            let numericVal: number;
+            let rawStringVal: string | undefined;
+
+            if (inputFormat === "binary") {
+              try {
+                rawStringVal = binaryObjToString(val);
+                numericVal = parseBinaryToDecimal(rawStringVal);
+              } catch {
+                numericVal = Number(val);
+              }
+            } else {
+              numericVal = typeof val === "object" && "value" in val ? Number(val.value) : Number(val);
+            }
+
+            if (Number.isNaN(numericVal)) {
+              return toFloat32Breakdown(0, mode, parsedTarget);
+            }
+
+            const breakdown = toFloat32Breakdown(numericVal, mode, parsedTarget);
+
+            if (typeof val === "object" && val !== null) {
+              if ("guardBit" in val) {
+                // Preserve full guard bit/digit string (e.g. "3" for decimal)
+                breakdown.roundBit = String(val.guardBit);
+              }
+              if ("stickyAny" in val) breakdown.stickyAny = Boolean(val.stickyAny);
+              if ("roundedUp" in val) breakdown.roundedUp = Boolean(val.roundedUp);
+            }
+
+            // Set exact decimal value when in decimal format (prevents float double-rounding display)
+            if (inputFormat === "decimal") {
+              breakdown.storedValue = numericVal;
+            }
+
+            if (inputFormat === "binary" && rawStringVal) {
+              (breakdown as any).customBinaryString = rawStringVal;
+            }
+
+            return breakdown;
+          };
+
+          const nearest = res.roundNearest ?? res.roundToNearest ?? res.nearest;
+          const trunc = res.truncate ?? res.truncation ?? res.towardZero;
+          const up = res.roundUp ?? res.towardPositive;
+          const down = res.roundDown ?? res.towardNegative;
+
+          setCompare({
+            results: {
+              "nearest-even": buildBreakdown(nearest, "nearest-even"),
+              "toward-zero": buildBreakdown(trunc, "toward-zero"),
+              "toward-positive": buildBreakdown(up, "toward-positive"),
+              "toward-negative": buildBreakdown(down, "toward-negative"),
+            },
+          });
+          setStatus("idle");
+        })
+        .catch((err: Error) => {
+          if (cancelled) return;
+          setErrorMsg(err.message || "Custom Rounding failed.");
+          setStatus("error");
+          setCompare(null);
+        });
+
+    } else {
+      let decimalValue: number;
+      try {
+        decimalValue = inputToDecimal(input, inputFormat);
+      } catch (err) {
         setStatus("error");
+        setErrorMsg(err instanceof Error ? err.message : "Invalid input format.");
         setCompare(null);
-      });
+        return;
+      }
+
+      roundFloatCompare({ decimal: decimalValue, targetBits: parsedTarget })
+        .then((c) => {
+          if (cancelled) return;
+          setCompare(c);
+          setStatus("idle");
+        })
+        .catch((err: Error) => {
+          if (cancelled) return;
+          setErrorMsg(err.message || "Rounding failed.");
+          setStatus("error");
+          setCompare(null);
+        });
+    }
 
     return () => {
       cancelled = true;
     };
-  }, [input, inputFormat]);
+  }, [input, inputFormat, targetBits]);
 
   const activeFormat = INPUT_FORMATS.find((f) => f.id === inputFormat)!;
 
@@ -205,19 +325,45 @@ export default function RoundPage() {
           ))}
         </div>
 
-        <label style={labelStyle} htmlFor="decimal-input">
-          {activeFormat.label} input
-        </label>
-        <input
-          id="decimal-input"
-          className="bfl-field"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          inputMode={inputFormat === "decimal" ? "decimal" : "text"}
-          placeholder={activeFormat.placeholder}
-          style={inputStyle}
-        />
-        <div style={helperStyle}>{activeFormat.helper}</div>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 240 }}>
+            <label style={labelStyle} htmlFor="decimal-input">
+              {activeFormat.label} input
+            </label>
+            <input
+              id="decimal-input"
+              className="bfl-field"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              inputMode={inputFormat === "decimal" ? "decimal" : "text"}
+              placeholder={activeFormat.placeholder}
+              style={inputStyle}
+            />
+            <div style={helperStyle}>{activeFormat.helper}</div>
+          </div>
+
+          <div style={{ width: 180 }}>
+            <label style={labelStyle} htmlFor="target-bits-input">
+              {inputFormat === "decimal" 
+                ? "Target Digits" 
+                : inputFormat === "binary" 
+                ? "Target Bits" 
+                : "Target Mantissa Bits"}
+            </label>
+            <input
+              id="target-bits-input"
+              className="bfl-field"
+              type="number"
+              min={1}
+              max={52}
+              value={targetBits}
+              onChange={(e) => setTargetBits(e.target.value)}
+              placeholder="e.g. 23"
+              style={inputStyle}
+            />
+            <div style={helperStyle}>The Mantissa holds 23 bits.</div>
+          </div>
+        </div>
 
         {status === "error" && <ErrorNote>{errorMsg}</ErrorNote>}
       </Card>
@@ -248,7 +394,7 @@ export default function RoundPage() {
                       <tr key={m.id}>
                         <td style={tdStyle}>{m.short}</td>
                         <td style={{ ...tdStyle, fontFamily: "'JetBrains Mono', monospace" }}>
-                          {formatStoredValue(r.storedValue, inputFormat, r.hex)}
+                          {formatStoredValue(r.storedValue, inputFormat, r.hex, r)}
                         </td>
                         <td
                           style={{
@@ -317,7 +463,7 @@ function ModeBreakdownCard({
             <Stat label="Rounded up?" value={breakdown.roundedUp ? "yes" : "no"} mono />
             <Stat
               label={`Stored value (${activeFormat.label.toLowerCase()})`}
-              value={formatStoredValue(breakdown.storedValue, inputFormat, breakdown.hex)}
+              value={formatStoredValue(breakdown.storedValue, inputFormat, breakdown.hex, breakdown)}
               mono
             />
           </div>

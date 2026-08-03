@@ -8,7 +8,7 @@
 // bodies below with real requests
 
 import { toFloat32Breakdown, type Float32Breakdown, type RoundingMode, type SpecialCase, bitsToFloat32 } from "./ieee754";
-import { ieeeAdd, ieeeMul, convert } from "@/backend";
+import { ieeeAdd, ieeeMul, convert, roundingMethods } from "@/backend";
 
 export interface DecimalToBinaryRequest {
   decimal: number;
@@ -16,13 +16,15 @@ export interface DecimalToBinaryRequest {
 export type DecimalToBinaryResponse = Float32Breakdown;
 
 export interface RoundRequest {
-  decimal: number;
+  decimal: number | string;
   mode: RoundingMode;
+  targetBits?: number;
 }
 export type RoundResponse = Float32Breakdown;
 
 export interface RoundCompareRequest {
-  decimal: number;
+  decimal: number | string;
+  targetBits?: number;
 }
 export interface RoundCompareResponse {
   results: Record<RoundingMode, Float32Breakdown>;
@@ -55,12 +57,13 @@ function convertToBreakdown(input: number, conv: ReturnType<typeof convert>): Fl
   return {                                                 
     input,
     mode: "nearest-even",
+    targetBits: 23,
     sign,
     exponentUnbiased,
     exponentBiased,
     exponentBits,
     mantissaBits,
-    sourceSignificand: "1" + mantissaBits + "0".repeat(29), 
+    sourceSignificand: "1" + mantissaBits.padEnd(52, "0"), 
     roundBit: "0",
     stickyBits: "",
     stickyAny: false,
@@ -85,10 +88,10 @@ export async function decimalToBinary(
 
 export async function roundFloat(req: RoundRequest): Promise<RoundResponse> {
   await simulateLatency();
-  if (!Number.isFinite(req.decimal)) {
+  if (typeof req.decimal === "number" && !Number.isFinite(req.decimal)) {
     throw new Error("Enter a finite decimal number.");
   }
-  return toFloat32Breakdown(req.decimal, req.mode);
+  return toFloat32Breakdown(req.decimal, req.mode, req.targetBits ?? 23);
 }
 
 /** Convenience for the rounding page's side-by-side mode comparison table. */
@@ -106,9 +109,21 @@ export async function roundFloatCompare(
     "toward-negative",
   ];
   const results = Object.fromEntries(
-    modes.map((m) => [m, toFloat32Breakdown(req.decimal, m)])
+    modes.map((m) => [m, toFloat32Breakdown(req.decimal, m, req.targetBits ?? 23)])
   ) as Record<RoundingMode, Float32Breakdown>;
   return { results };
+}
+
+/** Interface for backend "roundingMethods" execution (Decimal / Binary / IEEE). */
+export async function computeCustomRounding(
+  inputStr: string,
+  signedStr: string,
+  signBitStr: string,
+  target: string,
+  type: "binary" | "decimal" | "ieee"
+) {
+  await simulateLatency();
+  return await roundingMethods(inputStr, signedStr, signBitStr, target, type);
 }
 
 // ============================================================================

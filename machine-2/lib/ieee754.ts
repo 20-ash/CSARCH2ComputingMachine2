@@ -21,6 +21,7 @@ export type SpecialCase = "zero" | "overflow" | "underflow" | null;
 export interface Float32Breakdown {
   input: number;
   mode: RoundingMode;
+  targetBits?: number;
 
   sign: 0 | 1;
 
@@ -80,6 +81,22 @@ function toHex(bits: string): string {
   return "0x" + intVal.toString(16).padStart(8, "0").toUpperCase();
 }
 
+/** convert the binary fraction to a real JS decimal number */
+export function parseBinaryFraction(binStr: string): number {
+  const parts = binStr.trim().split(".");
+  const intPart = parseInt(parts[0] || "0", 2);
+  if (parts.length < 2) return intPart;
+
+  let fracPart = 0;
+  const fracStr = parts[1];
+  for (let i = 0; i < fracStr.length; i++) {
+    if (fracStr[i] === "1") {
+      fracPart += Math.pow(2, -(i + 1));
+    }
+  }
+  return intPart + fracPart;
+}
+
 /**
  * Converts a JS number into its IEEE-754 single-precision (float32)
  * representation, applying the given rounding mode explicitly (rather than
@@ -89,21 +106,27 @@ function toHex(bits: string): string {
  * for this teaching tool.
  */
 export function toFloat32Breakdown(
-  input: number,
-  mode: RoundingMode = "nearest-even"
+  input: number | string,
+  mode: RoundingMode = "nearest-even",
+  targetBits: number = 23
 ): Float32Breakdown {
-  const sign: 0 | 1 = input < 0 || Object.is(input, -0) ? 1 : 0;
+  const numericInput =
+    typeof input === "string" ? parseBinaryFraction(input) : input;
+
+  const sign: 0 | 1 = numericInput < 0 || Object.is(numericInput, -0) ? 1 : 0;
+  const bitsToKeep = Math.max(1, Math.min(52, targetBits));
 
   if (input === 0) {
     const fullBinary = `${sign}${"0".repeat(8)}${"0".repeat(23)}`;
     return {
       input,
       mode,
+      targetBits: bitsToKeep,
       sign,
       exponentUnbiased: 0,
       exponentBiased: 0,
       exponentBits: "0".repeat(8),
-      mantissaBits: "0".repeat(23),
+      mantissaBits: "0".repeat(bitsToKeep),
       sourceSignificand: "1" + "0".repeat(52),
       roundBit: "0",
       stickyBits: "",
@@ -117,7 +140,7 @@ export function toFloat32Breakdown(
     };
   }
 
-  const abs = Math.abs(input);
+  const abs = Math.abs(numericInput);
   const { exponentBiased: dBiased, mantissaBits: dMantissa } = getFloat64Parts(abs);
   const exponentUnbiased = dBiased - 1023;
   const sourceSignificand = "1" + dMantissa; // 53 bits, exact for this double
@@ -126,13 +149,14 @@ export function toFloat32Breakdown(
   if (exponentUnbiased > 127) {
     const fullBinary = `${sign}${"1".repeat(8)}${"0".repeat(23)}`;
     return {
-      input,
+      input: numericInput,
       mode,
+      targetBits: bitsToKeep,
       sign,
       exponentUnbiased,
       exponentBiased: 255,
       exponentBits: "1".repeat(8),
-      mantissaBits: "0".repeat(23),
+      mantissaBits: "0".repeat(bitsToKeep),
       sourceSignificand,
       roundBit: "0",
       stickyBits: "",
@@ -148,13 +172,14 @@ export function toFloat32Breakdown(
   if (exponentUnbiased < -126) {
     const fullBinary = `${sign}${"0".repeat(8)}${"0".repeat(23)}`;
     return {
-      input,
+      input: numericInput,
       mode,
+      targetBits: bitsToKeep,
       sign,
       exponentUnbiased,
       exponentBiased: 0,
       exponentBits: "0".repeat(8),
-      mantissaBits: "0".repeat(23),
+      mantissaBits: "0".repeat(bitsToKeep),
       sourceSignificand,
       roundBit: "0",
       stickyBits: "",
@@ -169,16 +194,17 @@ export function toFloat32Breakdown(
   }
 
   // Normal range: keep 23 mantissa bits, look at the rest to decide rounding.
-  const mantissaKept = sourceSignificand.slice(1, 24); // 23 bits
-  const roundBit = (sourceSignificand[24] ?? "0") as "0" | "1";
-  const stickyBits = sourceSignificand.slice(25);
+  const mantissaKept = sourceSignificand.slice(1, 1 + bitsToKeep);  // depends on the user input of target digits/bits
+  const roundBitIndex = 1 + bitsToKeep;
+  const roundBit = (sourceSignificand[roundBitIndex] ?? "0") as "0" | "1";
+  const stickyBits = sourceSignificand.slice(roundBitIndex + 1);
   const stickyAny = stickyBits.includes("1");
 
   let roundUp = false;
   switch (mode) {
     case "nearest-even":
       if (roundBit === "1") {
-        roundUp = stickyAny ? true : mantissaKept[22] === "1";
+        roundUp = stickyAny ? true : mantissaKept[mantissaKept.length - 1] === "1";
       }
       break;
     case "toward-zero":
@@ -197,7 +223,7 @@ export function toFloat32Breakdown(
   let mantissaCarried = false;
   if (roundUp) {
     mantissaInt += 1;
-    if (mantissaInt === 1 << 23) {
+    if (mantissaInt === Math.pow(2, bitsToKeep)) {
       mantissaInt = 0;
       exponentFinal += 1;
       mantissaCarried = true;
@@ -208,13 +234,14 @@ export function toFloat32Breakdown(
   if (exponentFinal > 127) {
     const fullBinary = `${sign}${"1".repeat(8)}${"0".repeat(23)}`;
     return {
-      input,
+      input: numericInput,
       mode,
+      targetBits: bitsToKeep,
       sign,
       exponentUnbiased,
       exponentBiased: 255,
       exponentBits: "1".repeat(8),
-      mantissaBits: "0".repeat(23),
+      mantissaBits: "0".repeat(bitsToKeep),
       sourceSignificand,
       roundBit,
       stickyBits,
@@ -228,14 +255,16 @@ export function toFloat32Breakdown(
     };
   }
 
-  const mantissaFinalBits = mantissaInt.toString(2).padStart(23, "0");
+  const mantissaFinalBits = mantissaInt.toString(2).padStart(bitsToKeep, "0");
   const exponentBiasedFinal = exponentFinal + 127;
   const exponentBits = exponentBiasedFinal.toString(2).padStart(8, "0");
-  const fullBinary = `${sign}${exponentBits}${mantissaFinalBits}`;
+  const float32Mantissa = mantissaFinalBits.padEnd(23, "0").slice(0, 23);
+  const fullBinary = `${sign}${exponentBits}${float32Mantissa}`;
 
   return {
-    input,
+    input: numericInput,
     mode,
+    targetBits: bitsToKeep,
     sign,
     exponentUnbiased: exponentFinal,
     exponentBiased: exponentBiasedFinal,
