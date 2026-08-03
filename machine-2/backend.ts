@@ -1,4 +1,4 @@
-'use server'
+// 'use server'
 
 import { sign } from "crypto";
 import { format } from "util";
@@ -298,10 +298,6 @@ function roundDec(decInput: number, targetDigits: number, method: string) {
             return truncateDec(decInput, targetDigits);
         case "roundUp":
             return roundUpDec(decInput, targetDigits);
-        case "roundDown":
-            return roundDownDec(decInput, targetDigits);
-        case "roundNearest":
-            return roundNearDec(decInput, targetDigits);
     }
 }
 
@@ -384,22 +380,6 @@ function incrementBinary(binaryNum: number[], pointIndex: number) {
         arithmeticMagnitude: result,
         arithmeticPointIndex: pointIndex
     };
-}
-
-// helper function for dealing with round to nearest logic
-function roundNearJudge(input: number, targetDigits: number, disregard: number, half: number, lastKeepDigit: number) {
-    if (disregard > half) {
-        return roundUpDec(input, targetDigits);         // if higher than half, then round up
-    } else if (disregard < half) {
-        return roundDownDec(input, targetDigits);       // if lower than half, then round down
-    } else {
-        // if exactly half
-        if (lastKeepDigit % 2 !== 0) {
-            return roundUpDec(input, targetDigits);     // if odd, then round up to even
-        } else {
-            return truncateDec(input, targetDigits);    // if already even, then truncate
-        }
-    }
 }
 
 // --------------------------------------------------
@@ -523,8 +503,7 @@ function roundUpBinary(binaryInput: FormattedBinaryInput, targetBits: number) {
     output = output.slice(0, targetBits + firstSigBit);
     let outputDecimalPoint = binaryInput.decimalPointIndex;
 
-    // increments for positive numbers since round up means towards positive infinity
-    if (binaryInput.signed || binaryInput.signBit === 0) {
+    if (!binaryInput.signed || binaryInput.signBit === 0) {
         let incrementedObj = incrementBinary(output, binaryInput.decimalPointIndex);
         output = incrementedObj.arithmeticMagnitude;
         outputDecimalPoint = incrementedObj.arithmeticPointIndex;
@@ -556,6 +535,7 @@ function roundUpDec(input: number, targetDigits: number) {
         return truncateDec(input, targetDigits);
     }
 
+    const sign = input < 0 ? '-' : '';                // stores sign
     const absoluteInput = Math.abs(input);            // gets absolute value of input
     let formattedInput = absoluteInput.toString();    // convert to string
 
@@ -568,8 +548,8 @@ function roundUpDec(input: number, targetDigits: number) {
     // if input has no decimal, fracPart is default empty string
     const [intPart, fracPart = ''] = formattedInput.split('.');
 
-    // if input is neither in between 1 and -1
-    if (absoluteInput >= 1) {
+    // if input is a positive number greater than or equal to 1
+    if (input >= 1) {
         // if integer part is enough for the target number of digits
         if (intPart.length >= targetDigits) {
             const keep = intPart.slice(0, targetDigits);
