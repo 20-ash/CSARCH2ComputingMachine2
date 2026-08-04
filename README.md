@@ -156,11 +156,11 @@ The backend implements IEEE 754 single‑precision addition and multiplication v
 
 - **Round Signed Binary Error Handling**
 
-  ![Round Signed Binary Error Handling](roundSBinaryError.png)
+  ![Round Signed Binary Error Handling](roundSignedBinaryError.png)
 
 - **Round Unigned Binary Error Handling**
 
-  ![Round Unigned Binary Error Handling](roundUBinaryError.png)
+  ![Round Unigned Binary Error Handling](roundUnsignedBinaryError.png)
 
 - **Round IEEE-754 Hex**
 
