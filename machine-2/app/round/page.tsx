@@ -214,12 +214,26 @@ function formatStoredValue(
   hex: string, 
   breakdown?: Float32Breakdown
 ): string {
-  if (value === Infinity) return "+Infinity";
-  if (value === -Infinity) return "-Infinity";
+  
+  if (
+    breakdown?.specialCase === "overflow" || 
+    value === Infinity || 
+    value === -Infinity || 
+    !Number.isFinite(value)
+  ) {
+    const isNeg = breakdown?.sign === 1 || value < 0;
+    return isNeg ? "-Infinity" : "+Infinity";
+  }
+
+  if (breakdown?.specialCase === "zero" || value === 0) {
+    const isNeg = breakdown?.sign === 1 || Object.is(value, -0);
+    return isNeg ? "-0" : "0";
+  }
 
   if (breakdown && (breakdown as any).customBinaryString && format === "binary") {
     return (breakdown as any).customBinaryString;
   }
+
   if (format === "decimal") return String(value);
   if (format === "binary") return decimalToBinaryString(value);
   return hex;
