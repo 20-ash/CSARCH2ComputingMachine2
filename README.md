@@ -144,15 +144,15 @@ The backend implements IEEE 754 single‑precision addition and multiplication v
   ![Round Signed Binary Negative-1](SignedBinary-N1.png)
   ![Round Signed Binary Negative-2](SignedBinary-N2.png)
 
-- **Round Signed Binary Positive Infinity**
+- **Round Signed Positive Binary Infinity Edge Case**
 
-  ![Round Signed Binary Positive Infinity-1](SignedInfinityBinary-P1.png)
-  ![Round Signed Binary Positive Infinity-2](SignedInfinityBinary-P2.png)
+  ![Round Positive Binary Infinity Edge Case-1](roundBinInfinity-P1.png)
+  ![Round Positive Binary Infinity Edge Case-2](roundBinInfinity-P2.png)
 
-- **Round Signed Binary Negative Infinity**
+- **Round Signed Negative Binary Infinity Edge Case**
 
-  ![Round Signed Binary Negative Infinity-1](SignedInfinityBinary-N1.png)
-  ![Round Signed Binary Negative Infinity-2](SignedInfinityBinary-N2.png)
+  ![Round Negative Binary Infinity Edge Case-1](roundBinInfinity-N1.png)
+  ![Round Negative Binary Infinity Edge Case-2](roundBinInfinity-N2.png)
 
 - **Round Signed Binary Error Handling**
 
@@ -253,17 +253,6 @@ The backend implements IEEE 754 single‑precision addition and multiplication v
 - **Multiply Zero Rule**
 
   ![Multiply Zero Rule](mulzerorule.png)
-
-- **Round Signed Positive Binary Infinity Edge Case**
-
-  ![Round Positive Binary Infinity Edge Case-1](roundBinInfinity-P1.png)
-  ![Round Positive Binary Infinity Edge Case-2](roundBinInfinity-P2.png)
-
-- **Round Signed Negative Binary Infinity Edge Case**
-
-  ![Round Negative Binary Infinity Edge Case-1](roundBinInfinity-N1.png)
-  ![Round Negative Binary Infinity Edge Case-2](roundBinInfinity-N2.png)
-
 
 - **Add Exact Decimal (HEX)**
 
