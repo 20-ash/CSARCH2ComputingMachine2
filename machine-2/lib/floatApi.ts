@@ -166,16 +166,18 @@ export type ArithmeticResponse = ArithmeticResult;
 
 export async function computeArithmetic(req: ArithmeticRequest): Promise<ArithmeticResponse> {
   await simulateLatency();
-  // Unlike decimalToBinary/roundFloat, NaN and +/-Infinity are valid, intentional
-  // inputs here — ieeeAdd/ieeeMul both special-case them internally. Rejecting
-  // unparseable text (not NaN/Infinity) is handled by the page before this is called.
-  const result = req.operation === "add" ? ieeeAdd(req.a, req.b) : ieeeMul(req.a, req.b);
-  // Ensure hex is always set correctly from the final numeric value
-  if (result && typeof result === "object") {
-    const num = "decimal" in result ? result.decimal : "result" in result ? result.result : NaN;
-    if (typeof num === "number") {
-      (result as ArithmeticResult).hex = floatToCleanHex(num);
-    }
-  }
-  return result as ArithmeticResponse;
+  // Call the correct arithmetic function
+  const rawResult = req.operation === "add" ? ieeeAdd(req.a, req.b) : ieeeMul(req.a, req.b);
+
+  // Cast through unknown first to satisfy TS type-check
+  const result = rawResult as unknown as ArithmeticResult;
+
+  // Make SURE both numeric fields exist — fixes the "undefined vs number" error
+  result.result = result.decimal ?? result.result;
+  result.decimal = result.result ?? result.decimal;
+
+  // Now safely set hex from the guaranteed‑valid number
+  result.hex = floatToCleanHex(result.decimal);
+
+  return result;
 }
