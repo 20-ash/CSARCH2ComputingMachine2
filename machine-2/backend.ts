@@ -1025,31 +1025,62 @@ export function ieeeAdd(a: number, b: number) {
     }; // return result object with all relevant info
 }
 
-// Perform multiplication
 export function ieeeMul(a: number, b: number) {
-    if (isNaN(a) || isNaN(b)) // handle NaN cases
-        return { result: NaN, binary: "NaN", hex: "7FC00000" }; // NaN
-    if (a === 0 || b === 0) // handle zero cases
-        return { result: 0, binary: "0 00000000 00000000000000000000000", hex: "00000000" }; // zero
-    if (!isFinite(a) || !isFinite(b)) { // handle infinity cases
-        const prodSign = (a * b > 0) || (Object.is(a, -0) !== Object.is(b, -0));
-        return {
-            result: a * b,
-            binary: (prodSign ? "0" : "1") + " 11111111 00000000000000000000000",
-            hex: prodSign ? "7F800000" : "FF800000"
-        }; // keep infinity and use the correct sign (+ / -)
+    // 1. Force inputs to IEEE 754 Single Precision (32-bit)
+    const a32 = Math.fround(a);
+    const b32 = Math.fround(b);
+
+    // Compute proper sign via XOR (different signs -> negative)
+    const aIsNeg = Object.is(a32, -0) || a32 < 0;
+    const bIsNeg = Object.is(b32, -0) || b32 < 0;
+    const isResultNeg = aIsNeg !== bIsNeg;
+
+    const aIsNaN = Number.isNaN(a32);
+    const bIsNaN = Number.isNaN(b32);
+    const aIsZero = a32 === 0;
+    const bIsZero = b32 === 0;
+    const aIsInf = !Number.isFinite(a32) && !aIsNaN;
+    const bIsInf = !Number.isFinite(b32) && !bIsNaN;
+
+    // 2. Handle NaN Cases
+    if (aIsNaN || bIsNaN) {
+        return { result: NaN, binary: "0 11111111 10000000000000000000000", hex: "7FC00000" };
     }
 
-    const prodVal = a * b; // handle standard float arithmetic directly for baseline value
-    const A = convert(a); // convert operand a to IEEE 754 representation
-    const B = convert(b); // convert operand b to IEEE 754 representation
-    const resConverted = convert(prodVal); // handle exact conversion / float representation
+    // 3. Handle Infinity × Zero Edge Case FIRST (∞ × 0 = NaN)
+    if ((aIsInf && bIsZero) || (bIsInf && aIsZero)) {
+        return { result: NaN, binary: "0 11111111 10000000000000000000000", hex: "7FC00000" };
+    }
+
+    // 4. Handle Zero Cases (Preserving Signed Zero)
+    if (aIsZero || bIsZero) {
+        return {
+            result: isResultNeg ? -0 : 0,
+            binary: isResultNeg ? "1 00000000 00000000000000000000000" : "0 00000000 00000000000000000000000",
+            hex: isResultNeg ? "80000000" : "00000000"
+        };
+    }
+
+    // 5. Handle Infinity Cases (Preserving Correct Sign)
+    if (aIsInf || bIsInf) {
+        return {
+            result: isResultNeg ? -Infinity : Infinity,
+            binary: (isResultNeg ? "1" : "0") + " 11111111 00000000000000000000000",
+            hex: isResultNeg ? "FF800000" : "7F800000"
+        };
+    }
+
+    // 6. Normal 32-bit Float Multiplication
+    const prodVal = Math.fround(a32 * b32);
+    const A = convert(a32);
+    const B = convert(b32);
+    const resConverted = convert(prodVal);
 
     return {
-        operands: { a: A, b: B }, // store operands for reference
-        stepByStep: "Unpack → XOR sign → debias exponents → multiply mantissas → normalize → round → pack", // Enumerate steps taken
+        operands: { a: A, b: B },
+        stepByStep: "Unpack → XOR sign → debias exponents → multiply mantissas → normalize → round → pack",
         binary: resConverted.binary,
         hex: resConverted.hex,
         decimal: prodVal
-    }; // return result object with all relevant info
+    };
 }
