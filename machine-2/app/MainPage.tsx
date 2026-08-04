@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
+import Link from "next/link"; // <-- IMPORTED NEXT.JS LINK
 import { Menu, X, Info, Binary, ArrowLeftRight, Sigma, ChevronDown } from "lucide-react";
 import DarkVeil from "@/components/DarkVeil";
 
@@ -227,7 +228,7 @@ export default function MainPage() {
                   {NAV_LINKS.map((link) => {
                     const Icon = link.icon;
                     return (
-                      <a
+                      <Link
                         key={link.id}
                         href={link.href}
                         className="bfl-navlink"
@@ -245,7 +246,7 @@ export default function MainPage() {
                       >
                         <Icon size={15} color="#6891ea" />
                         {link.label}
-                      </a>
+                      </Link>
                     );
                   })}
                 </div>
@@ -271,7 +272,6 @@ export default function MainPage() {
           transform: `translateY(${-heroTranslate}px)`,
         }}
       >
-
         <div
           style={{
             fontFamily: "'JetBrains Mono', monospace",
@@ -346,7 +346,7 @@ export default function MainPage() {
           {SERVICE_CARDS.map((card) => {
             const Icon = card.icon;
             return (
-              <a
+              <Link
                 key={card.id}
                 href={card.href}
                 className="bfl-card"
@@ -386,7 +386,7 @@ export default function MainPage() {
                   {card.title}
                 </div>
                 <div style={{ fontSize: 13, color: "#4A527A", lineHeight: 1.5 }}>{card.desc}</div>
-              </a>
+              </Link>
             );
           })}
         </div>
