@@ -1033,7 +1033,6 @@ export function ieeeAdd(a: number, b: number) {
                 binary: "NaN",
                 hex: "7FC00000",
                 operands: { a: A, b: B },
-                stepByStep
             }; 
         }
         // Same-sign infinities: preserve sign of result
@@ -1081,7 +1080,6 @@ export function ieeeMul(a: number, b: number) {
             binary: "NaN",
             hex: "7FC00000", // Canonical NaN encoding
             operands: { a: A, b: B }, // Include operand details for consistency
-            stepByStep // Include algorithm steps for all cases
         };
     }
 
