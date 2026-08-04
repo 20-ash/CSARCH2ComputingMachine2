@@ -249,22 +249,22 @@ type ArithmeticBinaryResult = {
     arithmeticPointIndex: number;       // indicates at which index does the fractional part start in input
                                         // -1 if input is whole number
     guardBit: number;                   // guard bit
-    stickyAny: boolean;                 // sticky
-    roundedUp: boolean;                 // did round up or not
+    stickyAny: boolean;                 // true if any dropped bits after the guard bit were non-zero, false if not
+    roundedUp: boolean;                 // true if number was rounded up, false if not
 };
 
 // custom data type for storing output for decimal data type
 type DecimalResult = {
-    value: number | string;     // value that could be number or string
+    value: number | string;     // rounded string or numeric output
     guardBit: number;           // guard bit
-    stickyAny: boolean;         // sticky
-    roundedUp: boolean;         // did round up or not
+    stickyAny: boolean;         // true if any dropped bits after the guard bit were non-zero, false if not
+    roundedUp: boolean;         // true if number was rounded up, false if not
 };
 
 // --------------------------------------------------
 // MAIN ENTRANCE FOR ROUNDING METHODS
 
-// properly formats and converts user input depending on the input (binary or decimal)
+// properly formats and converts user input depending on the input (binary, decimal, or ieee)
 export function roundingMethods(inputStr: string, signedStr: string, signBitStr: string, target: string, type: string) {
     const targetNum = Number(target);
 
@@ -287,21 +287,28 @@ export function roundingMethods(inputStr: string, signedStr: string, signBitStr:
 function parseIeeeInputToDecimal(inputStr: string): number {
     const cleaned = inputStr.trim().replace(/^0x/i, "").replace(/\s+/g, "");
     let uint32 = 0;
+
+    // parse 32-bit binary string
     if (/^[01]{32}$/.test(cleaned)) {
         uint32 = parseInt(cleaned, 2) >>> 0;
     } else if (/^[0-9a-fA-F]{8}$/.test(cleaned)) {
+        // parse 8-digit hexadecimal representation
         uint32 = parseInt(cleaned, 16) >>> 0;
     } else {
+        // fallback parsing as raw numeric string
         const num = Number(inputStr);
         return Number.isNaN(num) ? 0 : num;
     }
+
+    // decode uint32 bit pattern as IEEE 754 single-precision float
     const buf = new ArrayBuffer(4);
     const view = new DataView(buf);
     view.setUint32(0, uint32, false);
+
     return view.getFloat32(0, false);
 }
 
-// directs to rounding method chosen by user (for binary inputs)
+// directs to rounding methods for binary/ieee inputs
 function roundBinary(binaryInput: FormattedBinaryInput, targetBits: number) {
     return {
         truncate: truncateBinary(binaryInput, targetBits),
@@ -311,7 +318,7 @@ function roundBinary(binaryInput: FormattedBinaryInput, targetBits: number) {
     };
 }
 
-// directs to rounding method chosen by user (for decimal inputs)
+// directs to rounding methods for decimal inputs
 function roundDec(decInput: number, targetDigits: number, rawStr?: string) {
     return {
         truncate: truncateDec(decInput, targetDigits, rawStr),
@@ -357,20 +364,31 @@ function findFirstSigFig(input: number[]) {
     return input.findIndex(b => b !== 0);   // finds first index that is not 0
 }
 
-// helper to get guard and sticky for binary numbers
+// helper to get guard, sticky bit status, and cutoff index for binary numbers
 function getBinaryGuardAndSticky(binaryInput: FormattedBinaryInput, targetBits: number) {
     const { magnitude } = binaryInput;
-    const firstSigFig = findFirstSigFig(magnitude);
+    const firstSigFig = findFirstSigFig(magnitude);     // get first significant bit
 
+    // if input is 0 then return 0
     if (firstSigFig === -1) {
-        return { guardBit: 0, stickyAny: false, cutIndex: -1 };
+        return { 
+            guardBit: 0, 
+            stickyAny: false, 
+            cutIndex: -1 
+        };
     }
 
+    // index where to cut
     const cutIndex = firstSigFig + targetBits;
-    const guardBit = cutIndex < magnitude.length ? magnitude[cutIndex] : 0;
-    const stickyBits = cutIndex + 1 < magnitude.length ? magnitude.slice(cutIndex + 1) : [];
-    const stickyAny = stickyBits.some(b => b === 1);
 
+    // guard bit
+    const guardBit = cutIndex < magnitude.length ? magnitude[cutIndex] : 0;
+    
+    // sticky bits
+    const stickyBits = cutIndex + 1 < magnitude.length ? magnitude.slice(cutIndex + 1) : [];
+    const stickyAny = stickyBits.some(b => b === 1);    // true if any dropped bits after the guard bit were non-zero, false if not
+
+    // return guard bit, sticky bit status, and cut index
     return { 
         guardBit, 
         stickyAny, 
@@ -378,13 +396,17 @@ function getBinaryGuardAndSticky(binaryInput: FormattedBinaryInput, targetBits: 
     };
 }
 
+// return incremented binary number and new point index
 function incrementBinaryAtCut(binaryInput: FormattedBinaryInput, targetBits: number): { arithmeticMagnitude: number[]; arithmeticPointIndex: number } {
     const { magnitude, decimalPointIndex } = binaryInput;
+
+    // finds first significant bit
     const firstSigFig = findFirstSigFig(magnitude);
     if (firstSigFig === -1) {
         return { arithmeticMagnitude: [0], arithmeticPointIndex: -1 };
     }
 
+    // index where to cut or split
     const cutIndex = firstSigFig + targetBits;
     const intLen = decimalPointIndex === -1 ? magnitude.length : decimalPointIndex;
 
@@ -392,6 +414,7 @@ function incrementBinaryAtCut(binaryInput: FormattedBinaryInput, targetBits: num
     let suffix: number[];
     let pointIndex: number;
 
+    // extract kept prefix and construct required trailing integer zeros if cut occurs before decimal point
     if (cutIndex < intLen) {
         prefix = magnitude.slice(0, cutIndex);
         suffix = new Array(intLen - cutIndex).fill(0);
@@ -405,13 +428,16 @@ function incrementBinaryAtCut(binaryInput: FormattedBinaryInput, targetBits: num
         pointIndex = decimalPointIndex;
     }
 
-    let carry = 1;
+    let carry = 1;      // initialize to 1 for addition at LSB
+
+    // increments binary number
     for (let i = prefix.length - 1; i >= 0; i--) {
         let sumBit = prefix[i] + carry;
         prefix[i] = sumBit % 2;
         carry = Math.floor(sumBit / 2);
     }
 
+    // put carry overflow bit at start if carry remains at MSB position
     if (carry) {
         prefix.unshift(1);
         if (pointIndex !== -1) {
@@ -421,6 +447,7 @@ function incrementBinaryAtCut(binaryInput: FormattedBinaryInput, targetBits: num
 
     let combined = [...prefix, ...suffix];
 
+    // strip unnecessary trailing zeros after fractional point
     while (
         pointIndex !== -1 &&
         combined.length > pointIndex &&
@@ -429,22 +456,31 @@ function incrementBinaryAtCut(binaryInput: FormattedBinaryInput, targetBits: num
         combined.pop();
     }
 
+    // convert to whole number if fractional part was completely stripped
     if (pointIndex !== -1 && combined.length <= pointIndex) {
         pointIndex = -1;
     }
 
+    // return magnitude and new point index
     return {
         arithmeticMagnitude: combined,
         arithmeticPointIndex: pointIndex
     };
 }
 
-// helper to get guard and sticky for decimal numbers
+// helper to get guard, sticky bit status, and cutoff index for decimal numbers
 function getDecimalGuardSticky(input: number, targetDigits: number, rawStr?: string) {
-    if (input === 0) return { guardBit: 0, stickyAny: false };
+    // if input is 0 then return 0
+    if (input === 0) 
+        return { 
+            guardBit: 0, 
+            stickyAny: false 
+        };
 
     const absoluteInput = Math.abs(input);
     let formattedInput = rawStr ? rawStr.trim().replace(/^[-+]/, '') : absoluteInput.toString();
+    
+    // expand scientific notation strings into standard decimal format
     if (formattedInput.includes('e')) {
         formattedInput = absoluteInput.toFixed(50).replace(/0+$/, '').replace(/\.$/, '');
     }
@@ -453,6 +489,7 @@ function getDecimalGuardSticky(input: number, targetDigits: number, rawStr?: str
 
     let disregardStr = '';
 
+    // determine dropped digits based on whether number is >= 1 or < 1
     if (absoluteInput >= 1) {
         if (intPart.length >= targetDigits) {
             disregardStr = intPart.slice(targetDigits) + fracPart;
@@ -462,16 +499,24 @@ function getDecimalGuardSticky(input: number, targetDigits: number, rawStr?: str
         }
     } else {
         const firstSigFig = fracPart.search(/[1-9]/);
-        if (firstSigFig === -1) return { guardBit: 0, stickyAny: false };
+
+        if (firstSigFig === -1) 
+            return { guardBit: 0, stickyAny: false };
+
         disregardStr = fracPart.slice(firstSigFig + targetDigits);
     }
 
-    if (!disregardStr) return { guardBit: 0, stickyAny: false };
+    if (!disregardStr) 
+        return { 
+            guardBit: 0, 
+            stickyAny: false 
+        };
 
-    const guardBit = Number(disregardStr[0]);
-    const stickyDigits = disregardStr.slice(1);
-    const stickyAny = stickyDigits.search(/[1-9]/) !== -1;
+    const guardBit = Number(disregardStr[0]);               // guard bit
+    const stickyDigits = disregardStr.slice(1);             // sticky digits
+    const stickyAny = stickyDigits.search(/[1-9]/) !== -1;  // sticky bit status
 
+    // return guard bit and sticky bit status
     return { 
         guardBit, 
         stickyAny 
@@ -484,6 +529,7 @@ function incrementDecimalString(keptStr: string, fracDigits: number): string {
     const incrementedBigInt = BigInt(cleanStr) + BigInt(1);
     let str = incrementedBigInt.toString();
 
+    // reinsert decimal point if fractional digits exist
     if (fracDigits > 0) {
         while (str.length <= fracDigits) {
             str = '0' + str;
@@ -492,6 +538,7 @@ function incrementDecimalString(keptStr: string, fracDigits: number): string {
         const fracP = str.slice(str.length - fracDigits);
         return `${intP}.${fracP}`;
     }
+
     return str;
 }
 
@@ -501,10 +548,12 @@ function incrementDecimalString(keptStr: string, fracDigits: number): string {
 // handles the truncation for binary numbers
 function truncateBinary(binaryInput: FormattedBinaryInput, targetBits: number): ArithmeticBinaryResult {
     const { magnitude, decimalPointIndex } = binaryInput;
-    const { guardBit, stickyAny } = getBinaryGuardAndSticky(binaryInput, targetBits);
+    const { guardBit, stickyAny } = getBinaryGuardAndSticky(binaryInput, targetBits);   // get guard bit and sticky
 
     // Find the first non-zero bit (first significant figure)
     const firstSigFig = findFirstSigFig(magnitude);
+
+    // if input is 0 return 0
     if (firstSigFig === -1) {
         return {
             arithmeticMagnitude: [0],
@@ -525,6 +574,7 @@ function truncateBinary(binaryInput: FormattedBinaryInput, targetBits: number): 
     let keptMagnitude: number[];
     let newPointIndex = decimalPointIndex;  // stores new decimal point index
 
+    // zero-pad whole numbers if cutIndex happens before decimal point
     if (keepEndIndex < intLen) {
         const kept = magnitude.slice(0, keepEndIndex);
         const zeroPadding = new Array(intLen - keepEndIndex).fill(0);
@@ -533,6 +583,7 @@ function truncateBinary(binaryInput: FormattedBinaryInput, targetBits: number): 
     } else {
         keptMagnitude = magnitude.slice(0, Math.min(keepEndIndex, magnitude.length));
 
+        // trim trailing fractional zeros
         while (
             newPointIndex !== -1 &&
             keptMagnitude.length > newPointIndex &&
@@ -558,18 +609,28 @@ function truncateBinary(binaryInput: FormattedBinaryInput, targetBits: number): 
 // handles the truncation for decimal numbers (including whole numbers and floats)
 function truncateDec(input: number, targetDigits: number, rawStr?: string): DecimalResult {
     const { guardBit, stickyAny } = getDecimalGuardSticky(input, targetDigits, rawStr);
-    if (input === 0) return { value: 0, guardBit: 0, stickyAny: false, roundedUp: false };
+    
+    // if input is 0 return 0
+    if (input === 0) 
+        return { 
+            value: 0, 
+            guardBit: 0, 
+            stickyAny: false, 
+            roundedUp: false 
+        };
 
     const sign = input < 0 ? '-' : '';
     const absoluteInput = Math.abs(input);
     let formattedInput = rawStr ? rawStr.trim().replace(/^[-+]/, '') : absoluteInput.toString();
 
+    // handle scientific notation string format
     if (formattedInput.includes('e')) {
         formattedInput = absoluteInput.toFixed(50).replace(/0+$/, '').replace(/\.$/, '');
     }
 
     const [intPart, fracPart = ''] = formattedInput.split('.');
 
+    // pad integer part with trailing zeros if integer digits exceed target digits
     if (intPart.length >= targetDigits && absoluteInput >= 1) {
         const keep = intPart.slice(0, targetDigits);
         const zeroPadding = '0'.repeat(intPart.length - targetDigits);
@@ -583,6 +644,7 @@ function truncateDec(input: number, targetDigits: number, rawStr?: string): Deci
 
     let truncatedFrac = '';
 
+    // truncate fractional part based on relative magnitude (< 1 vs >= 1)
     if (absoluteInput < 1 && absoluteInput > 0) {
         const firstSigFig = fracPart.search(/[1-9]/);
         if (firstSigFig === -1) return { value: 0, guardBit: 0, stickyAny: false, roundedUp: false };
