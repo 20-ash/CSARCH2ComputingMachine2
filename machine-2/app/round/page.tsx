@@ -10,6 +10,9 @@ import { ROUNDING_MODES, toFloat32Breakdown, type Float32Breakdown, type Roundin
 
 type InputFormat = "decimal" | "binary" | "ieee";
 
+// Maximum representable finite value in IEEE-754 single precision
+const FLOAT32_MAX = 3.4028234663852886e38;
+
 const INPUT_FORMATS: {
   id: InputFormat;
   label: string;
@@ -279,12 +282,58 @@ export default function RoundPage() {
       const isNegative = trimmedInput.startsWith("-");
       const signBit = isNegative ? "1" : "0";
 
-      // expand scientific notation into fixed-point notation
+      // Expand scientific notation into fixed-point notation
       const expandedInput = inputFormat === "decimal"
         ? expandDecimalScientific(trimmedInput)
         : expandBinaryScientific(trimmedInput);
 
-      // remove sign for custom rounding processing
+      // Check if value exceeds float32 range
+      let numVal: number;
+      try {
+        numVal = inputToDecimal(expandedInput, inputFormat);
+      } catch {
+        numVal = NaN;
+      }
+
+      // for overflow/underflow
+      if (!Number.isNaN(numVal) && (Math.abs(numVal) > FLOAT32_MAX || !Number.isFinite(numVal))) {
+        const isInfNeg = isNegative || numVal < 0;
+        const infSignBit: 0 | 1 = isInfNeg ? 1 : 0;
+
+        const buildInfBreakdown = (mode: RoundingMode): Float32Breakdown => ({
+          input: isInfNeg ? -Infinity : Infinity,
+          mode,
+          targetBits: parsedTarget,
+          sign: infSignBit,
+          exponentUnbiased: 128,
+          exponentBiased: 255,
+          exponentBits: "11111111",
+          mantissaBits: "0".repeat(parsedTarget),
+          sourceSignificand: "1" + "0".repeat(52),
+          roundBit: "0",
+          stickyBits: "",
+          stickyAny: false,
+          roundedUp: false,
+          mantissaCarried: false,
+          fullBinary: `${infSignBit}11111111${"0".repeat(23)}`,
+          hex: infSignBit ? "0xFF800000" : "0x7F800000",
+          storedValue: isInfNeg ? -Infinity : Infinity,
+          specialCase: "overflow",
+        });
+
+        setCompare({
+          results: {
+            "nearest-even": buildInfBreakdown("nearest-even"),
+            "toward-zero": buildInfBreakdown("toward-zero"),
+            "toward-positive": buildInfBreakdown("toward-positive"),
+            "toward-negative": buildInfBreakdown("toward-negative"),
+          },
+        });
+        setStatus("idle");
+        return;
+      }
+
+      // remove sign for custom rounding backend processing
       const cleanInput = expandedInput.replace(/^[+-]/, "");
 
       computeCustomRounding(cleanInput, "signed", signBit, targetBits, inputFormat)
