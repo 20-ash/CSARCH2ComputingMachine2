@@ -17,24 +17,26 @@ const OPERATIONS: { id: ArithmeticOperation; label: string; short: string }[] = 
 type Tone = "transparent" | "blue" | "white";
 type InputMode = "decimal" | "hex";
 
+// Convert hex string to 32-bit float value
 function hexStringToDecimal(raw: string): number | { error: string } {
-  const cleaned = raw.trim().replace(/^0x/i, "").replace(/\s+/g, "");
-  if (!/^[0-9a-fA-F]{8}$/.test(cleaned)) {
+  const cleaned = raw.trim().replace(/^0x/i, "").replace(/\s+/g, ""); // strip prefix and spaces
+  if (!/^[0-9a-fA-F]{8}$/.test(cleaned)) { // must be exactly 8 hex digits
     return { error: "Invalid Input. Double check your input. Enter exactly 8 hex digits (32-bit IEEE 754)." };
   }
-  const intVal = parseInt(cleaned, 16) >>> 0;
+  const intVal = parseInt(cleaned, 16) >>> 0; // parse as unsigned integer
   const buf = new ArrayBuffer(4);
   const view = new DataView(buf);
   view.setUint32(0, intVal);
-  return view.getFloat32(0);
+  return view.getFloat32(0); // reinterpret bits as float
 }
 
+// Parse input string into numeric value or error
 function parseOperand(
   raw: string,
   mode: InputMode
 ): { value: number } | { error: string } | null {
   const trimmed = raw.trim();
-  if (trimmed === "") return null;
+  if (trimmed === "") return null; // empty input is nothing yet
 
   if (mode === "hex") {
     const decoded = hexStringToDecimal(trimmed);
@@ -54,44 +56,50 @@ function parseOperand(
   return { value };
 }
 
+// Check if result includes full operand breakdown and steps
 function hasOperandBreakdown(
   r: ArithmeticResponse
 ): r is Extract<ArithmeticResponse, { operands: unknown; stepByStep: unknown }> {
   return "operands" in r && "stepByStep" in r;
 }
 
+// Format number so -0 stays visible instead of becoming "0"
+function formatDecimal(val: number): string {
+  if (Object.is(val, -0)) return "-0";
+  return String(val);
+}
+
+// Get final numeric value from result object
 function finalDecimal(r: ArithmeticResponse): number {
-  if ("decimal" in r && typeof r.decimal === "number") {
-    return r.decimal;
-  }
-  if ("result" in r && typeof r.result === "number") {
-    return r.result;
-  }
+  if ("decimal" in r && typeof r.decimal === "number") return r.decimal;
+  if ("result" in r && typeof r.result === "number") return r.result;
   return 0;
 }
 
+// Clean binary string: remove spaces, validate 32 bits
 function cleanBits(binary: unknown): string | null {
   if (typeof binary !== "string") return null;
-  const stripped = binary.replace(/\s/g, "");
+  const stripped = binary.replace(/\s/g, ""); // remove spacing
+  if (stripped === "NaN") return null; // skip special text
   return /^[01]{32}$/.test(stripped) ? stripped : null;
 }
 
-// Dissect a 32-bit binary string into IEEE 754 components
+// Split 32-bit binary into sign, exponent, mantissa parts
 function parseIEEEComponents(binStr: string) {
   const clean = binStr.replace(/\s/g, "");
   if (clean.length !== 32) return null;
-  const sign = clean[0];
-  const expBits = clean.slice(1, 9);
-  const mantBits = clean.slice(9);
+  const sign = clean[0]; // first bit is sign
+  const expBits = clean.slice(1, 9); // next 8 bits exponent
+  const mantBits = clean.slice(9); // last 23 bits mantissa
   const expVal = parseInt(expBits, 2);
-  const unbiasedExp = expVal - 127;
+  const unbiasedExp = expVal - 127; // remove bias of 127
   return {
     sign,
     expBits,
     expVal,
     unbiasedExp,
     mantBits,
-    significand: `1.${mantBits}`,
+    significand: `1.${mantBits}`, // restore implicit leading 1
   };
 }
 
@@ -105,6 +113,7 @@ export default function ArithmeticPage() {
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
+  // Reset inputs when switching mode
   const handleModeChange = (next: InputMode) => {
     if (next === mode) return;
     setMode(next);
@@ -112,6 +121,7 @@ export default function ArithmeticPage() {
     setBInput("");
   };
 
+  // Run calculation whenever inputs/mode/operation change
   useEffect(() => {
     const a = parseOperand(aInput, mode);
     const b = parseOperand(bInput, mode);
@@ -144,9 +154,7 @@ export default function ArithmeticPage() {
         setResult(null);
       });
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; }; // cancel old request if changed
   }, [aInput, bInput, mode, operation]);
 
   const finalBits = result ? cleanBits(result.binary) : null;
@@ -245,12 +253,12 @@ export default function ArithmeticPage() {
                 </div>
                 <div style={rowStyle}>
                   <Stat tone="blue" label="Hex" value={safeHex} mono />
-                  <Stat tone="blue" label="Decimal" value={String(finalDecimal(result))} mono />
+                  <Stat tone="blue" label="Decimal" value={formatDecimal(finalDecimal(result))} mono />
                 </div>
               </>
             ) : (
               <ErrorNote tone="blue">
-                Result: {safeHex} — Decimal: {String(finalDecimal(result))}
+                Result: {safeHex} — Decimal: {formatDecimal(finalDecimal(result))}
               </ErrorNote>
             )}
           </Card>
@@ -268,7 +276,6 @@ export default function ArithmeticPage() {
 
                 return (
                   <>
-                    {/* Step 1: Unpack Operands */}
                     <Step n={1} title="Unpack IEEE 754 Operands">
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12, marginTop: 4 }}>
                         <div style={operandCardStyle}>
@@ -284,7 +291,6 @@ export default function ArithmeticPage() {
                       </div>
                     </Step>
 
-                    {/* Step 2: Exponent Handling */}
                     <Step n={2} title={isAdd ? "Align Exponents" : "Compute Product Exponent"}>
                       {isAdd ? (
                         <>
@@ -301,7 +307,6 @@ export default function ArithmeticPage() {
                       )}
                     </Step>
 
-                    {/* Step 3: Significand / Mantissa Operation */}
                     <Step n={3} title={isAdd ? "Add / Subtract Significands" : "Sign & Mantissa Multiplication"}>
                       {isAdd ? (
                         <>
@@ -315,12 +320,10 @@ export default function ArithmeticPage() {
                       )}
                     </Step>
 
-                    {/* Step 4: Normalization & Rounding */}
                     <Step n={4} title="Normalize & Round (RNE)">
                       Shift intermediate result into standard 1.mmmm format. Apply Round-to-Nearest, Ties-to-Even on discarded guard/round/sticky bits to fit 23 mantissa bits.
                     </Step>
 
-                    {/* Step 5: Assemble Final Word */}
                     <Step n={5} title="Assemble Final 32-bit Word">
                       {finalBits ? (
                         <>
