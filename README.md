@@ -279,6 +279,9 @@ The backend implements IEEE 754 single‑precision addition and multiplication v
   ![Add Zero](addhexzero.png)
   ![Add Signed Zero](addhexsignedzero.png)
 
+- **Multiply Fraction Integer (HEX)**
+
+  ![Multiply Fraction Integer](mulfractioninteger.png)
 
 
 
