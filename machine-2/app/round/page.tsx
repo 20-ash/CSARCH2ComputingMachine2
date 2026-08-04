@@ -585,7 +585,7 @@ export default function RoundPage() {
                 ? "Target Digits" 
                 : inputFormat === "binary" 
                 ? "Target Bits" 
-                : "Target Mantissa Bits (1–23)"}
+                : "Target Mantissa Bits"}
             </label>
             <input
               id="target-bits-input"
