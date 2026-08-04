@@ -1025,12 +1025,13 @@ export function ieeeAdd(a: number, b: number) {
     }; // return result object with all relevant info
 }
 
+// Perform multiplication
 export function ieeeMul(a: number, b: number) {
-    // 1. Cast inputs to IEEE 754 Single Precision (32-bit)
+    // 1. Force inputs to IEEE 754 Single Precision (32-bit)
     const a32 = Math.fround(a);
     const b32 = Math.fround(b);
 
-    // Extract sign via XOR
+    // Compute proper sign via XOR (different signs -> negative)
     const aIsNeg = Object.is(a32, -0) || a32 < 0;
     const bIsNeg = Object.is(b32, -0) || b32 < 0;
     const isResultNeg = aIsNeg !== bIsNeg;
@@ -1042,48 +1043,42 @@ export function ieeeMul(a: number, b: number) {
     const aIsInf = !Number.isFinite(a32) && !aIsNaN;
     const bIsInf = !Number.isFinite(b32) && !bIsNaN;
 
-    // Handle NaN
+    // 2. Handle NaN Cases
     if (aIsNaN || bIsNaN) {
-        return {
-            decimal: NaN,
-            binary: "0 11111111 10000000000000000000000",
-            hex: "7FC00000"
-        };
+        return { result: NaN, binary: "0 11111111 10000000000000000000000", hex: "7FC00000" };
     }
 
-    // Handle ∞ × 0 = NaN
+    // 3. Handle Infinity × Zero Edge Case FIRST (∞ × 0 = NaN)
     if ((aIsInf && bIsZero) || (bIsInf && aIsZero)) {
-        return {
-            decimal: NaN,
-            binary: "0 11111111 10000000000000000000000",
-            hex: "7FC00000"
-        };
+        return { result: NaN, binary: "0 11111111 10000000000000000000000", hex: "7FC00000" };
     }
 
-    // Handle Zero
+    // 4. Handle Zero Cases (Preserving Signed Zero)
     if (aIsZero || bIsZero) {
         return {
-            decimal: isResultNeg ? -0 : 0,
+            result: isResultNeg ? -0 : 0,
             binary: isResultNeg ? "1 00000000 00000000000000000000000" : "0 00000000 00000000000000000000000",
             hex: isResultNeg ? "80000000" : "00000000"
         };
     }
 
-    // Handle Infinity
+    // 5. Handle Infinity Cases (Preserving Correct Sign)
     if (aIsInf || bIsInf) {
         return {
-            decimal: isResultNeg ? -Infinity : Infinity,
-            binary: isResultNeg ? "1 11111111 00000000000000000000000" : "0 11111111 00000000000000000000000",
+            result: isResultNeg ? -Infinity : Infinity,
+            binary: (isResultNeg ? "1" : "0") + " 11111111 00000000000000000000000",
             hex: isResultNeg ? "FF800000" : "7F800000"
         };
     }
 
-    // Normal 32-bit computation
+    // 6. Normal 32-bit Float Multiplication
     const prodVal = Math.fround(a32 * b32);
+    const A = convert(a32);
+    const B = convert(b32);
     const resConverted = convert(prodVal);
 
     return {
-        operands: { a: convert(a32), b: convert(b32) },
+        operands: { a: A, b: B },
         stepByStep: "Unpack → XOR sign → debias exponents → multiply mantissas → normalize → round → pack",
         binary: resConverted.binary,
         hex: resConverted.hex,
