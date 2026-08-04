@@ -45,6 +45,29 @@ function floatToCleanHex(value: number): string {
 }
 
 function convertToBreakdown(input: number, conv: ReturnType<typeof convert>): Float32Breakdown {
+   if (!Number.isFinite(input) || conv.binary === "NaN") {
+    return {
+      input,
+      mode: "nearest-even",
+      targetBits: 23,
+      sign: isNaN(input) ? 0 : input < 0 ? 1 : 0,
+      exponentUnbiased: NaN,
+      exponentBiased: NaN,
+      exponentBits: "11111111",
+      mantissaBits: "00000000000000000000000",
+      sourceSignificand: "NaN",
+      roundBit: "0",
+      stickyBits: "",
+      stickyAny: false,
+      roundedUp: false,
+      mantissaCarried: false,
+      fullBinary: conv.binary,
+      hex: conv.hex,
+      storedValue: input,
+      specialCase: isNaN(input) ? "nan" : "overflow",
+    } as Float32Breakdown;
+  }
+  
   const fullBinary = conv.binary.replaceAll(" ", "");
   const sign = fullBinary[0] === "1" ? 1 : 0;
   const exponentBits = fullBinary.slice(1, 9);
