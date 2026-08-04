@@ -297,7 +297,7 @@ export default function ArithmeticPage() {
                           Exponents are 2^{pA.unbiasedExp} and 2^{pB.unbiasedExp}.
                           {pA.unbiasedExp === pB.unbiasedExp
                             ? " Exponents are equal, no right-shift alignment required."
-                            : ` Shift the mantissa of the smaller magnitude right by ${Math.abs(pA.unbiasedExp - pB.unbiasedExp)} bit(s) to match exponent 2^{Math.max(pA.unbiasedExp, pB.unbiasedExp)}.`}
+                            : ` Shift the mantissa of the smaller magnitude right by ${Math.abs(pA.unbiasedExp - pB.unbiasedExp)} bit(s) to match exponent 2^${Math.max(pA.unbiasedExp, pB.unbiasedExp)}.`
                         </>
                       ) : (
                         <>
