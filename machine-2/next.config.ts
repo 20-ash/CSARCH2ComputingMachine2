@@ -1,12 +1,15 @@
 import type { NextConfig } from "next";
 
+const isGithubActions = process.env.GITHUB_ACTIONS || false;
+
 const nextConfig: NextConfig = {
   output: "export",
   trailingSlash: true,
   images: { unoptimized: true },
-  ...(process.env.GITHUB_ACTIONS
-    ? { basePath: "/CSARCH2ComputingMachine2", assetPrefix: "/CSARCH2ComputingMachine2/" }
-    : {}),
+  
+  // Set basePath ONLY when running inside GitHub Actions
+  basePath: isGithubActions ? "/CSARCH2ComputingMachine2" : "",
+
 };
 
 export default nextConfig;
