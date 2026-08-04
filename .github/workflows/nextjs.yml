@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: machine-2/CSARCH2ComputingMachine2
+        working-directory: CSARCH2ComputingMachine2/machine-2
     steps:
       - name: Checkout
         uses: actions/checkout@v4
