@@ -26,9 +26,35 @@
 
 ### 2.2. Rounding Methods
 
-The backend implements two rounding modes for both binary and decimal inputs:
+The backend implements four rounding modes for both binary and decimal inputs:
 - **Truncation** (`truncateBinary` / `truncateDec`): drops all bits/digits beyond the target precision, toward zero.
 - **Round up** (`roundUpBinary` / `roundUpDec`): rounds toward positive infinity; negative values follow truncation rules for rounding toward positive infinity.
+- **Round up** (`roundDownBinary` / `roundDownDec`): rounds toward negative infinity; positive values follow truncation rules for rounding toward negative infinity.
+- **Round to nearest, ties to even** (`roundNearBinary` / `roundNearDec`): rounds to the nearest integer; if it lies exactly at the midpoint, either truncate if already even or round up to nearest even if odd
+
+#### Helper Functions & Data Structures
+
+| Stage / Data Structure | Name | Responsibility / Specification |
+|---|---|---|
+| Input Format & Dispatch | `roundingMethods` | Entry point; routes Binary, Decimal, or IEEE-754 inputs to their respective rounding handlers |
+| Binary Input Schema | `FormattedBinaryInput` | Custom type storing sign metadata (`signed`, `signBit`), magnitude bit array, and fractional point index |
+| Result Output Schemas | `ArithmeticBinaryResult` / `DecimalResult` | Custom types returning rounded magnitude/value, `guardBit`, `stickyAny`, and `roundedUp` flag |
+| Binary Input Parsing | `formatBinaryInput` | Cleans raw binary string, extracts sign bit, identifies decimal point index, and parses magnitude array |
+| IEEE-754 Input Parsing | `parseIeeeInputToDecimal` | Decodes 32-bit binary strings or 8-digit hexadecimal patterns into standard float32 numbers via `DataView` |
+| First Significant Fig | `findFirstSigFig` | Locates the index of the first non-zero bit/digit in the magnitude array |
+| Binary Guard & Sticky | `getBinaryGuardAndSticky` | Determines the Guard Bit (bit immediately following target bits) and Sticky Bit status (whether any bit beyond Guard Bit is 1) |
+| Binary Incrementer | `incrementBinaryAtCut` | Performs binary addition (+1 at LSB/cut index), handles carry bit propagation across MSB, and adjusts decimal point |
+| Decimal Guard & Sticky | `getDecimalGuardSticky` | Determines Guard Digit and Sticky Status for decimal/scientific notation strings |
+| Decimal Incrementer | `incrementDecimalString` | Increments kept magnitude using `BigInt` arithmetic and reinserts the decimal point |
+
+#### Mode Implementations
+
+| Rounding Mode | Binary Function | Decimal Function | Behavior & Rules |
+|---|---|---|---|
+| **Truncation (RTZ)** | `truncateBinary` | `truncateDec` | **Round toward zero:** Drops all bits/digits beyond the target precision. Never increments magnitude regardless of discarded bits. |
+| **Round Up (RTP)** | `roundUpBinary` | `roundUpDec` | **Round toward $+\infty$:** If positive and non-zero bits/digits are discarded, increments magnitude by +1 at cut position. Negative numbers default to truncation. |
+| **Round Down (RTN)** | `roundDownBinary` | `roundDownDec` | **Round toward $-\infty$:** If negative and non-zero bits/digits are discarded, increments magnitude away from zero. Positive numbers default to truncation. |
+| **Round to Nearest (RNE)** | `roundNearBinary` | `roundNearDec` | **Round-to-Nearest, Ties-to-Even:** <br>• If Guard Bit $> \text{midpoint}$ (1 for binary, $>5$ for decimal): Increments magnitude.<br>• If Guard Bit equals midpoint with Sticky $= 1$: Increments magnitude.<br>• If exact tie (Sticky $= 0$): Increments only if the last kept digit (LSB) is odd, rounding to the nearest even number. |
 
 ### 2.3. Arithmetic Methods
 
