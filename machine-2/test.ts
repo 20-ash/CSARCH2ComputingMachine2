@@ -61,6 +61,9 @@ console.log(`Round IEEE Hex (3DCCCCCD, target 2): ${JSON.stringify(roundingMetho
 console.log(`Round IEEE 32-bit Binary (00111111110000000000000000000000, target 2): ${JSON.stringify(roundingMethods("00111111110000000000000000000000", "unsigned", "-1", "2", "ieee"))}`);
 console.log(`Round IEEE Neg Hex (C0200000, target 2): ${JSON.stringify(roundingMethods("C0200000", "signed", "1", "2", "ieee"))}`);
 
+// IEEE-754 Error
+console.log(`Round IEEE Neg Hex (C0200000, target 2): ${JSON.stringify(roundingMethods("HHHHHHHH", "signed", "1", "2", "ieee"))}`);
+
 // Edge / Zero Cases
 console.log(`Round Binary Zero (0, target 2): ${JSON.stringify(roundingMethods("0", "unsigned", "-1", "2", "binary"))}`);
 console.log(`Round Dec Zero (0, target 2): ${JSON.stringify(roundingMethods("0", "unsigned", "-1", "2", "decimal"))}`);
