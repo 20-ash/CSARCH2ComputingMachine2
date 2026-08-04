@@ -965,111 +965,116 @@ function roundNearDec(input: number, targetDigits: number) {
 
 // Unpack IEEE binary string (sign, exponent, mantissa)
 function unpackIEEE(binStr: string) {
-    const bits = binStr.replaceAll(" ", "");
+    const bits = binStr.replaceAll(" ", ""); // removes spacing so continuous 32-bit string
     return {
-        sign: parseInt(bits[0]),
-        exp: parseInt(bits.slice(1, 9), 2),
+        sign: parseInt(bits[0]),                // first bit / sign bit
+        exp: parseInt(bits.slice(1, 9), 2),     // nex 8 bits / exponent
         mant: [1, ...bits.slice(9).split("").map(Number)] // implicit leading 1 restored
     };
 }
 
 // Pack back to IEEE 754 
 function packIEEE(sign: number, exp: number, mant: number[]) {
-    // drop implicit leading 1, round to 23 bits
-    const rounded = roundMantissa(mant.slice(1));
-    if (rounded.overflow) exp++;
-    const expBits = determineExponentBits(exp - 127, false);
+    const rounded = roundMantissa(mant.slice(1));    // drop implicit leading 1, round to 23 bits
+    if (rounded.overflow) exp++;                    // increment if mantissa overflows
+        const expBits = determineExponentBits(exp - 127, false);
     return {
-        binary: buildBinary(sign, expBits, rounded.mantissa),
-        hex: buildHex(buildBinary(sign, expBits, rounded.mantissa))
+        binary: buildBinary(sign, expBits, rounded.mantissa),         // binary string
+        hex: buildHex(buildBinary(sign, expBits, rounded.mantissa))   // HEX string
     };
 }
 
 // Perform addition
 export function ieeeAdd(a: number, b: number) {
-    // special cases first
-    if (isNaN(a) || isNaN(b)) return { result: NaN, binary: "NaN", hex: "NaN" };
+    // Special Cases
+    if (isNaN(a) || isNaN(b)) return { result: NaN, binary: "NaN", hex: "NaN" };    // NaN
     if (!isFinite(a) || !isFinite(b)) {
-        if (Object.is(a, -Infinity) && Object.is(b, Infinity)) 
+        if (Object.is(a, -Infinity) && Object.is(b, Infinity)) // -Infinity + Infinity = NaN
             return { result: NaN, binary: "NaN", hex: "NaN" };
-        if (Object.is(a, Infinity) && Object.is(b, -Infinity)) 
+        if (Object.is(a, Infinity) && Object.is(b, -Infinity)) // +Infinity + -Infinity = NaN
             return { result: NaN, binary: "NaN", hex: "NaN" };
-        return { result: a + b, binary: a > 0 ? "0 11111111 00000000000000000000000" : "1 11111111 00000000000000000000000", hex: a > 0 ? "7F800000" : "FF800000" };
+        return { result: a + b, 
+                 binary: a > 0 ? "0 11111111 00000000000000000000000" : "1 11111111 00000000000000000000000",
+                 hex: a > 0 ? "7F800000" : "FF800000" 
+                }; // keep infinity and use the correct sign (+ / -)
     }
 
-    const A = convert(a);
-    const B = convert(b);
-    const uA = unpackIEEE(A.binary);
-    const uB = unpackIEEE(B.binary);
-    let eA = uA.exp - 127, eB = uB.exp - 127;
-    let mA = [...uA.mant], mB = [...uB.mant];
+    const A = convert(a);                       // convert operand a to IEEE 754 representation
+    const B = convert(b);                       // convert operand b to IEEE 754 representation
+    const uA = unpackIEEE(A.binary);            // unpack a into sign/exponent/mantissa
+    const uB = unpackIEEE(B.binary);            // unpack b into sign/exponent/mantissa
+    let eA = uA.exp - 127, eB = uB.exp - 127;   // debias exponents (undo the 127 bias to get real exponent)
+    let mA = [...uA.mant], mB = [...uB.mant];   // copy mantissas
 
     // align exponents
-    if (eA > eB) {
+    if (eA > eB) { // shift b right if a has larger exponent
         mB = [0, ...mB.slice(0, - (eA - eB))];
         eB = eA;
-    } else {
+    } else {        // shift a right if b has larger exponent
         mA = [0, ...mA.slice(0, - (eB - eA))];
         eA = eB;
     }
 
-    // add/subtract mantissas based on sign
+    // add or subtract mantissas based on sign
     let signR = uA.sign;
     let mantR: number[];
-    if (uA.sign === uB.sign) {
+    if (uA.sign === uB.sign) { // if same sign, add mantissa
         signR = uA.sign;
         mantR = mA.map((v, i) => v + mB[i]);
-    } else {
-        signR = a > b ? uA.sign : uB.sign;
+    } else { // if different sign, subtract mantissa
+        signR = a > b ? uA.sign : uB.sign; // result sign is the sign of the larger operand
         mantR = mA.map((v, i) => Math.abs(v - mB[i]));
     }
 
     // normalize
-    let first1 = mantR.findIndex(b => b === 1);
-    let expR = eA - first1;
-    mantR = mantR.slice(first1);
-    while (mantR.length < 24) mantR.push(0);
+    let first1 = mantR.findIndex(b => b === 1);    // find position of first 1 bit
+    let expR = eA - first1; // adjust exponent based on position of first 1 bit
+    mantR = mantR.slice(first1); // remove leading zeros to normalize mantissa
+    while (mantR.length < 24) mantR.push(0); // pad mantissa to 24 bits (1 implicit + 23 explicit) to ensure enough bits for rounding
 
-    const packed = packIEEE(signR, expR + 127, mantR);
-    const dec = parseInt(packed.binary.replaceAll(" ", ""), 2);
+    const packed = packIEEE(signR, expR + 127, mantR); // pack result back to IEEE 754 format
+    const dec = parseInt(packed.binary.replaceAll(" ", ""), 2); // convert binary string to decimal
     return {
-        operands: { a: A, b: B },
-        stepByStep: "Unpack → align exponents → add mantissas → normalize → round → pack",
-        ...packed,
-        decimal: new Float32Array([dec])[0]
+        operands: { a: A, b: B }, // store operands for reference
+        stepByStep: "Unpack → align exponents → add mantissas → normalize → round → pack", // Enumerate steps taken
+        ...packed, // return packed result
+        decimal: new Float32Array([dec])[0] // convert binary string to decimal
     };
 }
 
 // Perform multiplication
 export function ieeeMul(a: number, b: number) {
-    if (isNaN(a) || isNaN(b)) 
-        return { result: NaN, binary: "NaN", hex: "NaN" };
-    if (a === 0 || b === 0) 
-        return { result: 0, binary: "0 00000000 00000000000000000000000", hex: "00000000" };
-    if (!isFinite(a) || !isFinite(b)) {
-        return { result: a * b, binary: (a*b > 0 ? "0" : "1") + " 11111111 00000000000000000000000", hex: (a*b > 0 ? "7F800000" : "FF800000") };
+    if (isNaN(a) || isNaN(b))  // handle NaN cases
+        return { result: NaN, binary: "NaN", hex: "NaN" }; // NaN
+    if (a === 0 || b === 0)  // handle zero cases
+        return { result: 0, binary: "0 00000000 00000000000000000000000", hex: "00000000" }; // zero
+    if (!isFinite(a) || !isFinite(b)) { // handle infinity cases
+        return { result: a * b,  
+                 binary: (a*b > 0 ? "0" : "1") + " 11111111 00000000000000000000000",
+                 hex: (a*b > 0 ? "7F800000" : "FF800000") 
+                }; // keep infinity and use the correct sign (+ / -)
     }
 
-    const A = convert(a);
-    const B = convert(b);
-    const uA = unpackIEEE(A.binary);
-    const uB = unpackIEEE(B.binary);
-    const signR = uA.sign ^ uB.sign;
-    const expR = (uA.exp - 127) + (uB.exp - 127) + 1;
+    const A = convert(a);   // convert operand a to IEEE 754 representation
+    const B = convert(b);   // convert operand b to IEEE 754 representation
+    const uA = unpackIEEE(A.binary);  // unpack a into sign/exponent/mantissa
+    const uB = unpackIEEE(B.binary);  // unpack b into sign/exponent/mantissa
+    const signR = uA.sign ^ uB.sign;  // XOR sign bits to determine result sign
+    const expR = (uA.exp - 127) + (uB.exp - 127) + 1;  // debias exponents and add them together; +1 for normalization
 
     // multiply mantissas (simplified bit product)
     let mantissaR: number[] = [];
-    for (let i = 0; i < uA.mant.length; i++) {
-        if (uA.mant[i]) mantissaR = mantissaR.map((v,j) => v + (uB.mant[j]||0));
+    for (let i = 0; i < uA.mant.length; i++) { // iterate through each bit of the first mantissa
+        if (uA.mant[i]) mantissaR = mantissaR.map((v,j) => v + (uB.mant[j]||0)); // if bit is 1, add the second mantissa to the result
     }
-    while (mantissaR.length < 24) mantissaR.push(0);
+    while (mantissaR.length < 24) mantissaR.push(0); // pad mantissa to 24 bits (1 implicit + 23 explicit) to ensure enough bits for rounding
 
-    const packed = packIEEE(signR, expR + 127, mantissaR);
-    const dec = parseInt(packed.binary.replaceAll(" ", ""), 2);
+    const packed = packIEEE(signR, expR + 127, mantissaR);  // pack result back to IEEE 754 format
+    const dec = parseInt(packed.binary.replaceAll(" ", ""), 2); // convert binary string to decimal
     return {
-        operands: { a: A, b: B },
-        stepByStep: "Unpack → XOR sign → debias exponents → multiply mantissas → normalize → round → pack",
-        ...packed,
-        decimal: new Float32Array([dec])[0]
+        operands: { a: A, b: B }, // store operands for reference
+        stepByStep: "Unpack → XOR sign → debias exponents → multiply mantissas → normalize → round → pack", // Enumerate steps taken
+        ...packed, // return packed result
+        decimal: new Float32Array([dec])[0] // convert binary string to decimal
     };
 }
