@@ -289,7 +289,7 @@ The backend implements IEEE 754 single‑precision addition and multiplication v
 
 - **Multiply Mixed Sign (HEX)**
 
-  ![Multiply Mixed Sign](mulmixedsign.png)
+  ![Multiply Mixed Sign](mulmixedsignshex.png)
 
 - **Multiply NaN(HEX)**
 
