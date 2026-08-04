@@ -1026,6 +1026,16 @@ export function ieeeAdd(a: number, b: number) {
 }
 
 // Perform Multiplication
+// Reusable buffer to prevent per-call heap allocation
+const f32Buffer = new Float32Array(1);
+const i32Buffer = new Int32Array(f32Buffer.buffer);
+
+// Inspect MSb
+function isFloat32Negative(num: number): boolean {
+    f32Buffer[0] = num;
+    return (i32Buffer[0] & 0x80000000) !== 0; // Check sign bit (MSB)
+}
+
 export function ieeeMul(a: number, b: number) {
     // 1. Force inputs to IEEE 754 Single Precision (32-bit)
     const a32 = Math.fround(a);
@@ -1034,9 +1044,9 @@ export function ieeeMul(a: number, b: number) {
     const A = convert(a32);
     const B = convert(b32);
 
-    // Compute proper sign via XOR (different signs -> negative)
-    const aIsNeg = Object.is(a32, -0) || a32 < 0;
-    const bIsNeg = Object.is(b32, -0) || b32 < 0;
+    // Compute proper sign bit via bitwise inspection
+    const aIsNeg = isFloat32Negative(a32);
+    const bIsNeg = isFloat32Negative(b32);
     const isResultNeg = aIsNeg !== bIsNeg;
 
     const aIsNaN = Number.isNaN(a32);
@@ -1051,24 +1061,22 @@ export function ieeeMul(a: number, b: number) {
         stepByStep: "Unpack → XOR sign → debias exponents → multiply mantissas → normalize → round → pack"
     };
 
+    // Helper for NaN responses preserving XOR sign
+    const makeNaNResponse = () => ({
+        ...baseMeta,
+        decimal: NaN,
+        binary: (isResultNeg ? "1" : "0") + " 11111111 10000000000000000000000",
+        hex: isResultNeg ? "FFC00000" : "7FC00000"
+    });
+
     // 2. Handle NaN Cases
     if (aIsNaN || bIsNaN) {
-        return {
-            ...baseMeta,
-            decimal: NaN,
-            binary: "0 11111111 10000000000000000000000",
-            hex: "7FC00000"
-        };
+        return makeNaNResponse();
     }
 
-    // 3. Handle Infinity × Zero Edge Case FIRST (∞ × 0 = NaN)
+    // 3. Handle Infinity × Zero Edge Case (∞ × 0 = NaN)
     if ((aIsInf && bIsZero) || (bIsInf && aIsZero)) {
-        return {
-            ...baseMeta,
-            decimal: NaN,
-            binary: "0 11111111 10000000000000000000000",
-            hex: "7FC00000"
-        };
+        return makeNaNResponse();
     }
 
     // 4. Handle Zero Cases (Preserving Signed Zero)
@@ -1093,6 +1101,17 @@ export function ieeeMul(a: number, b: number) {
 
     // 6. Normal 32-bit Float Multiplication
     const prodVal = Math.fround(a32 * b32);
+
+    // Handle 32-bit overflow to Infinity
+    if (!Number.isFinite(prodVal)) {
+        return {
+            ...baseMeta,
+            decimal: isResultNeg ? -Infinity : Infinity,
+            binary: (isResultNeg ? "1" : "0") + " 11111111 00000000000000000000000",
+            hex: isResultNeg ? "FF800000" : "7F800000"
+        };
+    }
+
     const resConverted = convert(prodVal);
 
     return {
