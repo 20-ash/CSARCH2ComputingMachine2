@@ -23,7 +23,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Set package manager
+
+      - name: Use npm only
         id: detect-package-manager
         run: |
           echo "manager=npm" >> $GITHUB_OUTPUT
@@ -34,7 +35,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: ${{ steps.detect-package-manager.outputs.manager }}
+          cache: npm
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -44,21 +45,21 @@ jobs:
       - name: Restore cache
         uses: actions/cache@v4
         with:
-          path: machine-2/CSARCH2ComputingMachine2/.next/cache
-          key: ${{ runner.os }}-nextjs-${{ hashFiles('machine-2/CSARCH2ComputingMachine2/package-lock.json') }}-${{ hashFiles('machine-2/CSARCH2ComputingMachine2/**.[jt]s', 'machine-2/CSARCH2ComputingMachine2/**.[jt]sx') }}
+          path: .next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('package-lock.json') }}-${{ hashFiles('**.[jt]s', '**.[jt]sx') }}
           restore-keys: |
-            ${{ runner.os }}-nextjs-${{ hashFiles('machine-2/CSARCH2ComputingMachine2/package-lock.json') }}-
+            ${{ runner.os }}-nextjs-${{ hashFiles('package-lock.json') }}-
 
       - name: Install dependencies
-        run: ${{ steps.detect-package-manager.outputs.manager }} ${{ steps.detect-package-manager.outputs.command }}
+        run: npm ci
 
       - name: Build with Next.js
-        run: ${{ steps.detect-package-manager.outputs.runner }} next build
+        run: npx next build
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: machine-2/CSARCH2ComputingMachine2/out
+          path: ./out
 
   deploy:
     environment:
