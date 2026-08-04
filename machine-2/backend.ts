@@ -1028,38 +1028,43 @@ export function ieeeAdd(a: number, b: number) {
 // Perform multiplication
 export function ieeeMul(a: number, b: number) {
     // Handle NaN: if either operand is NaN, return canonical NaN
-    if (isNaN(a) || isNaN(b))
+    if (Number.isNaN(a) || Number.isNaN(b)) {
         return { result: NaN, binary: "NaN", hex: "7FC00000" }; // NaN = sign 0, exponent all 1, mantissa non-zero
+    }
 
-    // Detect signed zero using Object.is (=== cannot distinguish 0 vs -0)
-    const aIsNegZero = Object.is(a, -0);
-    const bIsNegZero = Object.is(b, -0);
-    // If either operand is zero , compute signed zero result
-    if (Object.is(a, 0) || Object.is(b, 0)) {
-        // Sign of product: XOR of operand signs (different signs → negative zero)
-        const isNegZero = aIsNegZero !== bIsNegZero;
+    // Extract operand signs and compute result sign via XOR
+    const aIsNeg = Object.is(a, -0) || a < 0;
+    const bIsNeg = Object.is(b, -0) || b < 0;
+    const isResultNeg = aIsNeg !== bIsNeg; // Sign of product: XOR of operand signs (different signs → negative result)
+
+    const aIsZero = a === 0;
+    const bIsZero = b === 0;
+    const aIsInf = !Number.isFinite(a);
+    const bIsInf = !Number.isFinite(b);
+
+    // Handle Infinity × Zero edge case (∞ × 0 = NaN per IEEE 754 standard)
+    if ((aIsInf && bIsZero) || (bIsInf && aIsZero)) {
+        return { result: NaN, binary: "NaN", hex: "7FC00000" };
+    }
+
+    // If either operand is zero, compute signed zero result
+    if (aIsZero || bIsZero) {
         return {
-            result: isNegZero ? -0 : 0, // Preserve correct signed zero value
-            binary: isNegZero ? "1 00000000 00000000000000000000000" : "0 00000000 00000000000000000000000", // IEEE 754 zero format
-            hex: isNegZero ? "80000000" : "00000000" // -0 = 0x80000000, +0 = 0x00000000
+            result: isResultNeg ? -0 : 0, // Preserve correct signed zero value
+            binary: isResultNeg ? "1 00000000 00000000000000000000000" : "0 00000000 00000000000000000000000", // IEEE 754 zero format
+            hex: isResultNeg ? "80000000" : "00000000" // -0 = 0x80000000, +0 = 0x00000000
         };
     }
 
-    // Handle infinity cases
-    if (!isFinite(a) || !isFinite(b)) {
-        // Opposite-sign infinities → NaN (∞ × -∞ = NaN)
-        if ((Object.is(a, Infinity) && Object.is(b, -Infinity)) ||
-            (Object.is(a, -Infinity) && Object.is(b, Infinity)))
-            return { result: NaN, binary: "NaN", hex: "7FC00000" };
-        // Same-sign infinities → preserve sign in result
-        const isNeg = Object.is(a, -Infinity) || Object.is(b, -Infinity);
+    // Handle infinity cases: preserve XOR sign in result (∞ × finite or ∞ × ∞)
+    if (aIsInf || bIsInf) {
         return {
-            result: isNeg ? -Infinity : Infinity,
-            binary: isNeg ? "1 11111111 00000000000000000000000" : "0 11111111 00000000000000000000000", // Infinity = exponent all 1, mantissa all 0
-            hex: isNeg ? "FF800000" : "7F800000" // -∞ = 0xFF800000, +∞ = 0x7F800000
+            result: isResultNeg ? -Infinity : Infinity, // Same-sign → +∞, opposite-sign → -∞
+            binary: isResultNeg ? "1 11111111 00000000000000000000000" : "0 11111111 00000000000000000000000", // Infinity = exponent all 1, mantissa all 0
+            hex: isResultNeg ? "FF800000" : "7F800000" // -∞ = 0xFF800000, +∞ = 0x7F800000
         };
     }
-    
+
     const prodVal = a * b;   // Compute actual product value for baseline reference
     const A = convert(a);   // Convert a to IEEE 754 single-precision representation
     const B = convert(b);  // Convert b to IEEE 754 single-precision representation
