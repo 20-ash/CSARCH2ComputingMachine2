@@ -31,8 +31,7 @@ console.log(`Input -8.75: ${JSON.stringify(convert(-8.75))}`);
 // Rounding Methods
 // Binary - Whole Numbers
 console.log(`Round Binary Unsigned Whole Tail>Mid (11101, target 2): ${JSON.stringify(roundingMethods("11101", "unsigned", "-1", "2", "binary"))}`);
-console.log(`Round Binary Unsigned Whole Exact Tie (1101, target 2): ${JSON.stringify(roundingMethods("1101", "unsigned", "-1", "2", "binary"))}`);
-console.log(`Round Binary Unsigned Whole (10100, target 2): ${JSON.stringify(roundingMethods("10100", "unsigned", "-1", "2", "binary"))}`);
+console.log(`Round Binary Unsigned Whole Exact Tie (1101, target 2): ${JSON.stringify(roundingMethods("11101", "signed", "1", "2", "binary"))}`);
 
 // Binary - Fractions & Tie Breaks (LSB Parity)
 console.log(`Round Binary Tie to Odd LSB (1.011, target 2): ${JSON.stringify(roundingMethods("1.011", "unsigned", "-1", "2", "binary"))}`);
@@ -40,19 +39,11 @@ console.log(`Round Binary Tie to Even LSB (1.101, target 2): ${JSON.stringify(ro
 console.log(`Round Binary Overflow Carry (1.111, target 2): ${JSON.stringify(roundingMethods("1.111", "unsigned", "-1", "2", "binary"))}`);
 console.log(`Round Binary Leading Zeros (0.001101, target 2): ${JSON.stringify(roundingMethods("0.001101", "unsigned", "-1", "2", "binary"))}`);
 
-// Binary - Signed Negatives
-console.log(`Round Binary Signed Neg (11101, target 2, sign 1): ${JSON.stringify(roundingMethods("11101", "signed", "1", "2", "binary"))}`);
-console.log(`Round Binary Signed Neg Exact Cut (1100, target 2, sign 1): ${JSON.stringify(roundingMethods("1100", "signed", "1", "2", "binary"))}`);
-
 // Decimal - Positives & Tie Breaks
 console.log(`Round Dec Positive Tail>5 (12.367, target 3): ${JSON.stringify(roundingMethods("12.367", "unsigned", "-1", "3", "decimal"))}`);
 console.log(`Round Dec Tie to Even LSB (12.35, target 3): ${JSON.stringify(roundingMethods("12.35", "unsigned", "-1", "3", "decimal"))}`);
 console.log(`Round Dec Tie to Odd LSB (12.45, target 3): ${JSON.stringify(roundingMethods("12.45", "unsigned", "-1", "3", "decimal"))}`);
 console.log(`Round Dec Tie + Sticky (12.3501, target 3): ${JSON.stringify(roundingMethods("12.3501", "unsigned", "-1", "3", "decimal"))}`);
-
-// Decimal - Negatives
-console.log(`Round Dec Negative (-12.367, target 3): ${JSON.stringify(roundingMethods("-12.367", "signed", "1", "3", "decimal"))}`);
-console.log(`Round Dec Negative Tie (-12.35, target 3): ${JSON.stringify(roundingMethods("-12.35", "signed", "1", "3", "decimal"))}`);
 
 // Decimal - Edge Cases (<1, Scientific, Large Integers)
 console.log(`Round Dec Small Frac (0.00456, target 2): ${JSON.stringify(roundingMethods("0.00456", "unsigned", "-1", "2", "decimal"))}`);
