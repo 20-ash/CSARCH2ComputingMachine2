@@ -26,7 +26,7 @@
 
 ### 2.2. Rounding Methods
 
-The backend implements four rounding modes for both binary and decimal inputs:
+The backend implements four rounding modes for binary, decimal, and IEEE-754 single precision inputs:
 - **Truncation** (`truncateBinary` / `truncateDec`): drops all bits/digits beyond the target precision, toward zero.
 - **Round up** (`roundUpBinary` / `roundUpDec`): rounds toward positive infinity; negative values follow truncation rules for rounding toward positive infinity.
 - **Round up** (`roundDownBinary` / `roundDownDec`): rounds toward negative infinity; positive values follow truncation rules for rounding toward negative infinity.
@@ -36,7 +36,7 @@ The backend implements four rounding modes for both binary and decimal inputs:
 
 | Stage / Data Structure | Name | Responsibility / Specification |
 |---|---|---|
-| Input Format & Dispatch | `roundingMethods` | Entry point; routes Binary, Decimal, or IEEE-754 inputs to their respective rounding handlers |
+| Input Format & Dispatch | `roundingMethods` | Entry point; routes Binary, Decimal, or IEEE-754 single precision inputs to their respective rounding handlers |
 | Binary Input Schema | `FormattedBinaryInput` | Custom type storing sign metadata (`signed`, `signBit`), magnitude bit array, and fractional point index |
 | Result Output Schemas | `ArithmeticBinaryResult` / `DecimalResult` | Custom types returning rounded magnitude/value, `guardBit`, `stickyAny`, and `roundedUp` flag |
 | Binary Input Parsing | `formatBinaryInput` | Cleans raw binary string, extracts sign bit, identifies decimal point index, and parses magnitude array |
