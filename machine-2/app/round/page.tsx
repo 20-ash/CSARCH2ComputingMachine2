@@ -20,15 +20,15 @@ const INPUT_FORMATS: {
   {
     id: "decimal",
     label: "Decimal",
-    placeholder: "e.g. 0.1",
-    helper: "A base-10 number, e.g. 0.1 or -13.25",
+    placeholder: "e.g. 0.1 or 1.5e-3",
+    helper: "A base-10 number, e.g. 0.1, -13.25, or scientific notation (1.2e-4)",
     default: "0.1",
   },
   {
     id: "binary",
     label: "Binary",
-    placeholder: "e.g. 1010.101 or -0.0011",
-    helper: "A base-2 fraction using only 0s and 1s, e.g. 0.0001100110011",
+    placeholder: "e.g. 1010.101 or 1.01p3",
+    helper: "A base-2 fraction, e.g. 0.00011 or base-2 exponent notation (1.01p3)",
     default: "0.0001100110011",
   },
   {
@@ -87,7 +87,85 @@ function parseIeeeToDecimal(raw: string): number {
   return view.getFloat32(0, false);
 }
 
-/** Converts a user's raw text (in the given format) into the decimal value the API expects. */
+/** Converts decimal scientific notation ("1.23e-4") into an expanded fixed-point string ("0.000123") */
+function expandDecimalScientific(str: string): string {
+  const trimmed = str.trim();
+  if (!/[eE]/.test(trimmed)) 
+    return trimmed;
+
+  const num = Number(trimmed);
+  if (Number.isNaN(num)) 
+    return trimmed;
+
+  // Convert to fixed decimal representation with high precision
+  // Prevents JS from outputting scientific notation for small/large values
+  const [mantissa, expStr] = trimmed.split(/[eE]/);
+  const exp = parseInt(expStr, 10);
+
+  let [intPart, fracPart = ""] = mantissa.split(".");
+  const isNeg = intPart.startsWith("-");
+  if (isNeg) intPart = intPart.slice(1);
+
+  if (exp >= 0) {
+    if (exp >= fracPart.length) {
+      intPart += fracPart + "0".repeat(exp - fracPart.length);
+      fracPart = "";
+    } else {
+      intPart += fracPart.slice(0, exp);
+      fracPart = fracPart.slice(exp);
+    }
+  } else {
+    const shift = Math.abs(exp);
+    if (shift >= intPart.length) {
+      fracPart = "0".repeat(shift - intPart.length) + intPart + fracPart;
+      intPart = "0";
+    } else {
+      fracPart = intPart.slice(intPart.length - shift) + fracPart;
+      intPart = intPart.slice(0, intPart.length - shift);
+    }
+  }
+
+  return `${isNeg ? "-" : ""}${intPart}${fracPart ? "." + fracPart : ""}`;
+}
+
+/** Expands binary scientific notation ("1.01p3") by shifting the binary point */
+function expandBinaryScientific(str: string): string {
+  const trimmed = str.trim();
+  if (!/[pP]/.test(trimmed)) 
+    return trimmed;
+
+  const [mantissa, expStr] = trimmed.split(/[pP]/);
+  const exp = parseInt(expStr, 10);
+  if (Number.isNaN(exp)) 
+    return trimmed;
+
+  let [intPart, fracPart = ""] = mantissa.split(".");
+  const isNeg = intPart.startsWith("-");
+  if (isNeg) intPart = intPart.slice(1);
+
+  if (exp >= 0) {
+    if (exp >= fracPart.length) {
+      intPart += fracPart + "0".repeat(exp - fracPart.length);
+      fracPart = "";
+    } else {
+      intPart += fracPart.slice(0, exp);
+      fracPart = fracPart.slice(exp);
+    }
+  } else {
+    const shift = Math.abs(exp);
+    if (shift >= intPart.length) {
+      fracPart = "0".repeat(shift - intPart.length) + intPart + fracPart;
+      intPart = "0";
+    } else {
+      fracPart = intPart.slice(intPart.length - shift) + fracPart;
+      intPart = intPart.slice(0, intPart.length - shift);
+    }
+  }
+
+  return `${isNeg ? "-" : ""}${intPart}${fracPart ? "." + fracPart : ""}`;
+}
+
+/** Converts raw text (in the given format) into the decimal value the API expects */
 function inputToDecimal(raw: string, format: InputFormat): number {
   if (format === "decimal") {
     const value = Number(raw);
@@ -100,7 +178,7 @@ function inputToDecimal(raw: string, format: InputFormat): number {
   return parseIeeeToDecimal(raw);
 }
 
-/** Converts a stored float value to an exact fixed-point binary string. */
+/** Converts a stored float value to an exact fixed-point binary string */
 function decimalToBinaryString(value: number): string {
   if (Number.isNaN(value)) return "NaN";
   if (!Number.isFinite(value)) return value > 0 ? "+Infinity" : "-Infinity";
@@ -125,7 +203,7 @@ function decimalToBinaryString(value: number): string {
   return sign + intPart.toString(2) + (fracStr ? "." + fracStr : "");
 }
 
-/** Formats a stored decimal value in whichever format the user chose as their input. */
+/** Formats a stored decimal value in whichever format the user chose as their input */
 function formatStoredValue(
   value: number, 
   format: InputFormat, 
@@ -172,23 +250,23 @@ export default function RoundPage() {
 
     const trimmedInput = input.trim();
 
-    // validation for decimal numbers
+    // validation for decimal numbers (also handles scientific notation)
     if (inputFormat === "decimal") {
       const isDecimal = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(trimmedInput);
       if (!isDecimal) {
         setStatus("error");
-        setErrorMsg("Decimal input can only contain digits (0–9), an optional sign (+/-), and a decimal point (e.g. -13.25).");
+        setErrorMsg("Decimal input can only contain digits (0–9), an optional sign (+/-), a decimal point, or scientific notation (e.g. -13.25 or 1.2e-4).");
         setCompare(null);
         return;
       }
     }
 
-    // validation for binary numbers
+    // validation for binary numbers (also handles scientific notation)
     if (inputFormat === "binary") {
-      const isBinary = /^[+-]?(?:[01]+(?:\.[01]*)?|\.[01]+)$/.test(trimmedInput);
+      const isBinary = /^[+-]?(?:[01]+(?:\.[01]*)?|\.[01]+)(?:[pP][+-]?\d+)?$/.test(trimmedInput);
       if (!isBinary) {
         setStatus("error");
-        setErrorMsg("Binary input can only contain 0s and 1s, an optional sign (+/-), and a single decimal point (e.g. -101.011).");
+        setErrorMsg("Binary input can only contain 0s and 1s, an optional sign (+/-), a decimal point, or base-2 scientific notation (e.g. -101.011 or 1.01p3).");
         setCompare(null);
         return;
       }
@@ -198,26 +276,34 @@ export default function RoundPage() {
     setStatus("loading");
 
     if (inputFormat === "decimal" || inputFormat === "binary") {
-      const isNegative = input.trim().startsWith("-");
+      const isNegative = trimmedInput.startsWith("-");
       const signBit = isNegative ? "1" : "0";
-      
-      const cleanInput = inputFormat === "binary" 
-        ? input.trim().replace(/^[+-]/, "") 
-        : input.trim();
+
+      // expand scientific notation into fixed-point notation
+      const expandedInput = inputFormat === "decimal"
+        ? expandDecimalScientific(trimmedInput)
+        : expandBinaryScientific(trimmedInput);
+
+      // remove sign for custom rounding processing
+      const cleanInput = expandedInput.replace(/^[+-]/, "");
 
       computeCustomRounding(cleanInput, "signed", signBit, targetBits, inputFormat)
         .then((res: any) => {
           if (cancelled || !res) return;
 
           const binaryObjToString = (obj: any): string => {
-            if (typeof obj === "string" || typeof obj === "number") return String(obj);
-            if (!obj) return "0";
+            if (typeof obj === "string" || typeof obj === "number") 
+              return String(obj);
+            
+            if (!obj) 
+              return "0";
 
             const mag: number[] = obj.arithmeticMagnitude ?? obj.magnitude ?? [];
             const pointIdx: number = obj.arithmeticPointIndex ?? obj.decimalPointIndex ?? -1;
             const sign = isNegative ? "-" : "";
 
-            if (mag.length === 0) return "0";
+            if (mag.length === 0) 
+              return "0";
 
             if (pointIdx === -1) {
               return sign + mag.join("");
@@ -371,7 +457,7 @@ export default function RoundPage() {
     <PageShell
       eyebrow="IEEE 754 · Single Precision"
       title="Numeric Rounding"
-      description="Most decimals don't fit exactly in 23 mantissa bits. See the guard, round, and sticky bits a rounding mode actually looks at, and how the choice of mode changes the stored value."
+      description="Explore how Decimal, Binary, and IEEE-754 inputs are trimmed to fit target precision. See the guard, round, and sticky bits a rounding mode actually looks at, and how the choice of mode changes the stored value."
     >
       <Card>
         <label style={labelStyle}>Input format</label>
