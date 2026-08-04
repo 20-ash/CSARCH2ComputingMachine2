@@ -889,4 +889,6 @@ const tdStyle: React.CSSProperties = {
   fontSize: 13.5,
   color: "#E4E8FA",
   borderBottom: "1px solid rgba(143,166,217,0.1)",
+  wordBreak: "break-word",
+  maxWidth: 280,
 };
