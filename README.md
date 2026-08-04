@@ -1,5 +1,9 @@
 # CSARCH2 Computing Machine 2 - IEEE 754 Binary Single-precision
 
+## 0. Video Walkthrough
+Click the link to watch the group walkthrough the app.
+[YouTube Link](https://youtu.be/9HPckJNPP4Q)
+
 ## 1. Project Overview
 
 ### A web-based simulator that implements IEEE 754 binary single-precision floating-point conversion that does the following:
@@ -306,7 +310,3 @@ The backend implements IEEE 754 single‑precision addition and multiplication v
 - **Multiply Underflow(HEX)**
 
   ![Multiply Underflow](mulunderflowhex.png)
-
-## 4. Video Walkthrough
-Click the link to watch the group walkthrough the app.
-[YouTube Link](https://youtu.be/9HPckJNPP4Q)
