@@ -279,11 +279,33 @@ The backend implements IEEE 754 single‑precision addition and multiplication v
   ![Add Zero](addhexzero.png)
   ![Add Signed Zero](addhexsignedzero.png)
 
-- **Multiply Fraction Integer (HEX)**
+- **Multiply Basic (HEX)**
 
-  ![Multiply Fraction Integer](mulfractioninteger.png)
+  ![Multiply Basic](mulbasichex.png)
 
+- **Multiply Fraction (HEX)**
 
+  ![Multiply Basic](mulfractionshex.png)
+
+- **Multiply Mixed Sign (HEX)**
+
+  ![Multiply Mixed Sign](mulmixedsign.png)
+
+- **Multiply NaN(HEX)**
+
+  ![Multiply NaN](mulnanhex.png)
+
+- **Multiply Negatives(HEX)**
+
+  ![Multiply Negatives](mulnegativeshex.png)
+
+- **Multiply Overflow(HEX)**
+
+  ![Multiply Overflow](muloverflowhex.png)
+
+- **Multiply Underflow(HEX)**
+
+  ![Multiply Underflow](mulunderflowhex.png)
 
 ## 4. Video Walkthrough
 
