@@ -1026,98 +1026,55 @@ export function ieeeAdd(a: number, b: number) {
 }
 
 // Perform Multiplication
-// Reusable buffer to prevent per-call heap allocation
-const f32Buffer = new Float32Array(1);
-const i32Buffer = new Int32Array(f32Buffer.buffer);
-
-// Inspect MSb
-function isFloat32Negative(num: number): boolean {
-    f32Buffer[0] = num;
-    return (i32Buffer[0] & 0x80000000) !== 0; // Check sign bit (MSB)
-}
-
+// IEEE 754 Single-Precision Floating-Point Multiplication
 export function ieeeMul(a: number, b: number) {
-    // 1. Force inputs to IEEE 754 Single Precision (32-bit)
-    const a32 = Math.fround(a);
-    const b32 = Math.fround(b);
+    // Handle NaN: if either operand is NaN, return canonical NaN
+    if (isNaN(a) || isNaN(b))
+        return { result: NaN, binary: "NaN", hex: "7FC00000" }; // NaN = sign 0, exponent all 1, mantissa non-zero
 
-    const A = convert(a32);
-    const B = convert(b32);
-
-    // Compute proper sign bit via bitwise inspection
-    const aIsNeg = isFloat32Negative(a32);
-    const bIsNeg = isFloat32Negative(b32);
-    const isResultNeg = aIsNeg !== bIsNeg;
-
-    const aIsNaN = Number.isNaN(a32);
-    const bIsNaN = Number.isNaN(b32);
-    const aIsZero = a32 === 0;
-    const bIsZero = b32 === 0;
-    const aIsInf = !Number.isFinite(a32) && !aIsNaN;
-    const bIsInf = !Number.isFinite(b32) && !bIsNaN;
-
-    const baseMeta = {
-        operands: { a: A, b: B },
-        stepByStep: "Unpack → XOR sign → debias exponents → multiply mantissas → normalize → round → pack"
-    };
-
-    // Helper for NaN responses preserving XOR sign
-    const makeNaNResponse = () => ({
-        ...baseMeta,
-        decimal: NaN,
-        binary: (isResultNeg ? "1" : "0") + " 11111111 10000000000000000000000",
-        hex: isResultNeg ? "FFC00000" : "7FC00000"
-    });
-
-    // 2. Handle NaN Cases
-    if (aIsNaN || bIsNaN) {
-        return makeNaNResponse();
-    }
-
-    // 3. Handle Infinity × Zero Edge Case (∞ × 0 = NaN)
-    if ((aIsInf && bIsZero) || (bIsInf && aIsZero)) {
-        return makeNaNResponse();
-    }
-
-    // 4. Handle Zero Cases (Preserving Signed Zero)
-    if (aIsZero || bIsZero) {
+    // Detect signed zero using Object.is (=== cannot distinguish 0 vs -0)
+    const aIsNegZero = Object.is(a, -0);
+    const bIsNegZero = Object.is(b, -0);
+    // If either operand is zero (including -0), compute signed zero result
+    if (Object.is(a, 0) || Object.is(b, 0)) {
+        // Sign of product: XOR of operand signs (different signs → negative zero)
+        const isNegZero = aIsNegZero !== bIsNegZero;
         return {
-            ...baseMeta,
-            decimal: isResultNeg ? -0 : 0,
-            binary: isResultNeg ? "1 00000000 00000000000000000000000" : "0 00000000 00000000000000000000000",
-            hex: isResultNeg ? "80000000" : "00000000"
+            result: isNegZero ? -0 : 0, // Preserve correct signed zero value
+            binary: isNegZero ? "1 00000000 00000000000000000000000" : "0 00000000 00000000000000000000000", // IEEE 754 zero format
+            hex: isNegZero ? "80000000" : "00000000" // -0 = 0x80000000, +0 = 0x00000000
         };
     }
 
-    // 5. Handle Infinity Cases (Preserving Correct Sign)
-    if (aIsInf || bIsInf) {
+    // Handle infinity cases
+    if (!isFinite(a) || !isFinite(b)) {
+        // Opposite-sign infinities → NaN (∞ × -∞ = NaN)
+        if ((Object.is(a, Infinity) && Object.is(b, -Infinity)) ||
+            (Object.is(a, -Infinity) && Object.is(b, Infinity)))
+            return { result: NaN, binary: "NaN", hex: "7FC00000" };
+        // Same-sign infinities → preserve sign in result
+        const isNeg = Object.is(a, -Infinity) || Object.is(b, -Infinity);
         return {
-            ...baseMeta,
-            decimal: isResultNeg ? -Infinity : Infinity,
-            binary: (isResultNeg ? "1" : "0") + " 11111111 00000000000000000000000",
-            hex: isResultNeg ? "FF800000" : "7F800000"
+            result: isNeg ? -Infinity : Infinity,
+            binary: isNeg ? "1 11111111 00000000000000000000000" : "0 11111111 00000000000000000000000", // Infinity = exponent all 1, mantissa all 0
+            hex: isNeg ? "FF800000" : "7F800000" // -∞ = 0xFF800000, +∞ = 0x7F800000
         };
     }
 
-    // 6. Normal 32-bit Float Multiplication
-    const prodVal = Math.fround(a32 * b32);
-
-    // Handle 32-bit overflow to Infinity
-    if (!Number.isFinite(prodVal)) {
-        return {
-            ...baseMeta,
-            decimal: isResultNeg ? -Infinity : Infinity,
-            binary: (isResultNeg ? "1" : "0") + " 11111111 00000000000000000000000",
-            hex: isResultNeg ? "FF800000" : "7F800000"
-        };
-    }
-
+    // Compute actual product value for baseline reference
+    const prodVal = a * b;
+    // Convert both operands to IEEE 754 single-precision representation
+    const A = convert(a);
+    const B = convert(b);
+    // Convert computed product back to standard IEEE format for verification
     const resConverted = convert(prodVal);
 
+    // Return full result set with metadata
     return {
-        ...baseMeta,
-        binary: resConverted.binary,
-        hex: resConverted.hex,
-        decimal: prodVal
+        operands: { a: A, b: B }, // Store unpacked operand details for debugging
+        stepByStep: "Unpack → XOR sign → debias exponents → multiply mantissas → normalize → round → pack", // Multiplication algorithm steps
+        binary: resConverted.binary, // Final binary representation
+        hex: resConverted.hex, // Final hexadecimal representation
+        decimal: prodVal // Actual numeric result
     };
 }
