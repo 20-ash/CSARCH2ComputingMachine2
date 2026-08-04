@@ -30,8 +30,9 @@ console.log(`Input -8.75: ${JSON.stringify(convert(-8.75))}`);
 
 // Rounding Methods
 // Binary - Whole Numbers
-console.log(`Round Binary Unsigned Whole Tail>Mid (11101, target 2): ${JSON.stringify(roundingMethods("11101", "unsigned", "-1", "2", "binary"))}`);
-console.log(`Round Binary Unsigned Whole Exact Tie (11101, target 2): ${JSON.stringify(roundingMethods("11101", "signed", "1", "2", "binary"))}`);
+console.log(`Round Binary Unsigned Whole Tail>Mid (11101, target 2): ${JSON.stringify(roundingMethods("11101", "unsigned", "-1", "2", "binary"))}`);    // unsigned
+console.log(`Round Binary Signed Whole Tail>Mid (11101, target 2): ${JSON.stringify(roundingMethods("11101", "signed", "1", "2", "binary"))}`);      // signed
+console.log(`Round Binary Signed Whole Tail>Mid (01101, target 2): ${JSON.stringify(roundingMethods("01101", "signed", "1", "2", "binary"))}`);      // signed
 
 // Binary - Fractions & Tie Breaks (LSB Parity)
 console.log(`Round Binary Tie to Odd LSB (1.011, target 2): ${JSON.stringify(roundingMethods("1.011", "unsigned", "-1", "2", "binary"))}`);
