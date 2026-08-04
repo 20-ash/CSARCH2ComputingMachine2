@@ -63,6 +63,18 @@ export function normalize(whole: number[], frac: number[]) {
 // orchestrator function that assembles all of the individual function pieces to perform the conversion.
 // returns the normalized (was used for debugging), IEEE binary, and IEEE hexadecimal representation of the input decimal.
 export function convert(input: number) {
+    if (isNaN(input)) {
+        return { normalized: "NaN", binary: "NaN", hex: "7FC00000" };
+    }
+    if (!Number.isFinite(input)) {
+        const sign = input < 0 ? 1 : 0;
+        return {
+            normalized: input < 0 ? "-Infinity" : "+Infinity",
+            binary: `${sign} 11111111 00000000000000000000000`,
+            hex: input < 0 ? "FF800000" : "7F800000"
+        };
+    }
+    
     // initialization assumes the input is 0 first
     // precision is used to adjust how many digits should the mantissa have
     const precision = 23;
