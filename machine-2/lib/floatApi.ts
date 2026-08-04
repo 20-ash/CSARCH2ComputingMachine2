@@ -148,13 +148,21 @@ export interface ArithmeticRequest {
   operation: ArithmeticOperation;
 }
 
+// Standard shape always returned by ieeeAdd / ieeeMul, including special cases
+interface ArithmeticResult {
+  result: number;
+  binary: string;
+  hex: string;
+  decimal: number;
+  operands: { a: any; b: any };
+  stepByStep: string;
+}
+
 /**
- * Mirrors whatever ieeeAdd/ieeeMul actually return, rather than a hand-written
- * shape — so this type can't silently drift from the backend's real output.
- * The two functions don't return identical shapes (special cases like NaN
- * short-circuit with fewer fields), hence the union.
+ * Mirrors the actual output shape — all fields are always present now,
+ * even for NaN / Infinity / zero cases.
  */
-export type ArithmeticResponse = ReturnType<typeof ieeeAdd> | ReturnType<typeof ieeeMul>;
+export type ArithmeticResponse = ArithmeticResult;
 
 export async function computeArithmetic(req: ArithmeticRequest): Promise<ArithmeticResponse> {
   await simulateLatency();
@@ -162,12 +170,12 @@ export async function computeArithmetic(req: ArithmeticRequest): Promise<Arithme
   // inputs here — ieeeAdd/ieeeMul both special-case them internally. Rejecting
   // unparseable text (not NaN/Infinity) is handled by the page before this is called.
   const result = req.operation === "add" ? ieeeAdd(req.a, req.b) : ieeeMul(req.a, req.b);
-  // Wrap and force valid hex on arithmetic results too
- if (result && typeof result === "object") {
+  // Ensure hex is always set correctly from the final numeric value
+  if (result && typeof result === "object") {
     const num = "decimal" in result ? result.decimal : "result" in result ? result.result : NaN;
     if (typeof num === "number") {
-      (result as any).hex = floatToCleanHex(num);
+      (result as ArithmeticResult).hex = floatToCleanHex(num);
     }
   }
-  return result;
+  return result as ArithmeticResponse;
 }
