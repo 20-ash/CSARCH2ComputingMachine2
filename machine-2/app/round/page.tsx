@@ -157,7 +157,15 @@ export default function RoundPage() {
     const parsedTarget = Number(targetBits);
     if (!targetBits || Number.isNaN(parsedTarget) || parsedTarget < 1) {
       setStatus("error");
-      setErrorMsg("Please enter a valid target integer.");
+      setErrorMsg("Please enter a valid positive target number.");
+      setCompare(null);
+      return;
+    }
+
+    // for ieee only, limit target input to 1-23 bits only
+    if (inputFormat === "ieee" && parsedTarget > 23) {
+      setStatus("error");
+      setErrorMsg("Target mantissa bits for IEEE-754 single precision must be between 1 and 23.");
       setCompare(null);
       return;
     }
@@ -388,20 +396,31 @@ export default function RoundPage() {
                 ? "Target Digits" 
                 : inputFormat === "binary" 
                 ? "Target Bits" 
-                : "Target Mantissa Bits"}
+                : "Target Mantissa Bits (1–23)"}
             </label>
             <input
               id="target-bits-input"
               className="bfl-field"
               type="number"
               min={1}
-              max={52}
+              max={inputFormat === "ieee" ? 23 : 52}
               value={targetBits}
-              onChange={(e) => setTargetBits(e.target.value)}
-              placeholder="e.g. 23"
+              onChange={(e) => {
+                const val = e.target.value;
+                if (inputFormat === "ieee" && Number(val) > 23) {
+                  setTargetBits("23");
+                } else {
+                  setTargetBits(val);
+                }
+              }}
+              placeholder={inputFormat === "ieee" ? "1 - 23" : "e.g. 10"}
               style={inputStyle}
             />
-            <div style={helperStyle}>The Mantissa holds 23 bits.</div>
+            <div style={helperStyle}>
+              {inputFormat === "ieee" 
+                ? "The Mantissa holds 23 bits." 
+                : "Number of target digits/bits for rounding."}
+            </div>
           </div>
         </div>
 
