@@ -801,6 +801,10 @@ function Stat({ label, value, mono }: { label: string; value: string; mono?: boo
           fontSize: 15,
           marginTop: 2,
           fontFamily: mono ? "'JetBrains Mono', monospace" : "inherit",
+          overflowWrap: "anywhere",
+          wordBreak: "break-all",
+          whiteSpace: "normal",
+          minWidth: 0,
         }}
       >
         {value}
@@ -904,6 +908,8 @@ const rowStyle: React.CSSProperties = {
   display: "flex",
   gap: 32,
   flexWrap: "wrap",
+  minWidth: 0,
+  width: "100%",
 };
 
 const thStyle: React.CSSProperties = {
