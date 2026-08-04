@@ -200,7 +200,7 @@ The backend implements IEEE 754 single‑precision addition and multiplication v
 
 - **Add Mixed Signs**
 
-  ![Add Mixed Signs](addmixedsigns.png)
+  ![Add Mixed Signs](addmixedsign.png)
 
 - **Add Negatives**
 
