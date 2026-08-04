@@ -28,10 +28,8 @@ console.log(`Input -8.75: ${JSON.stringify(convert(-8.75))}`);
 
 
 // rounding
-// inputStr: string, signedStr: string, signBitStr: string, method: string, target: string, type: string
-// console.log(`Input 1: ${JSON.stringify(roundingMethods("123456", "signed", "0", "truncation", "2", "decimal"))}`);
-// console.log(`Input 1: ${JSON.stringify(roundingMethods("0.000123456", "signed", "0", "truncation", "2", "decimal"))}`);
-// console.log(`Input 1: ${JSON.stringify(roundingMethods("011011", "signed", "0", "truncation", "2", "binary"))}`);
+// inputStr: string, signedStr: string, signBitStr: string, target: string, type: string
+
 
 // Addition
 console.log(`Add 1 + 1: ${JSON.stringify(ieeeAdd(1, 1))}`);

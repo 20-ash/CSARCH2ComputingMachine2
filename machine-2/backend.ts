@@ -330,10 +330,25 @@ function roundDec(decInput: number, targetDigits: number, rawStr?: string) {
 
 // formats input to object type FormattedBinaryInput and returns object
 function formatBinaryInput(inputStr: string, signedStr: string, signbitStr: string): FormattedBinaryInput {
-    let signed = signedStr === "signed";                // indicate whether input is signed (true) or unsigned (false) binary
+    const signed = signedStr === "signed";              // indicate whether input is signed (true) or unsigned (false) binary
     let clean = inputStr.trim().replace(/^[+-]/, "");   // cleaned input
-    let signBit = signed ? Number(signbitStr) : -1;     // converts sign bit to number, defaults to -1 if unsigned
-    let decimalPointIndex = clean.indexOf(".");         // determine the index of the decimal point
+    
+    // the sign bit (1 for negative and 0 for positive)
+    let signBit = -1;
+
+    // If binary input is signed then extract sign bit from leading character if present,
+    // or fallback to signbitStr parameter.
+    if (signed) {
+        if (clean.length > 0 && (clean[0] === "0" || clean[0] === "1")) {
+            signBit = Number(clean[0]);
+            clean = clean.slice(1); // Strip sign bit from magnitude string
+        } else {
+            signBit = Number(signbitStr);
+        }
+    }
+
+    // determine the index of the decimal point
+    let decimalPointIndex = clean.indexOf(".");
 
     // converts input to array of numbers for correct formatting
     let result: number[] = [];
@@ -388,7 +403,6 @@ function getBinaryGuardAndSticky(binaryInput: FormattedBinaryInput, targetBits: 
     const stickyBits = cutIndex + 1 < magnitude.length ? magnitude.slice(cutIndex + 1) : [];
     const stickyAny = stickyBits.some(b => b === 1);    // true if any dropped bits after the guard bit were non-zero, false if not
 
-    // return guard bit, sticky bit status, and cut index
     return { 
         guardBit, 
         stickyAny, 
@@ -400,44 +414,39 @@ function getBinaryGuardAndSticky(binaryInput: FormattedBinaryInput, targetBits: 
 function incrementBinaryAtCut(binaryInput: FormattedBinaryInput, targetBits: number): { arithmeticMagnitude: number[]; arithmeticPointIndex: number } {
     const { magnitude, decimalPointIndex } = binaryInput;
 
-    // finds first significant bit
     const firstSigFig = findFirstSigFig(magnitude);
     if (firstSigFig === -1) {
         return { arithmeticMagnitude: [0], arithmeticPointIndex: -1 };
     }
 
-    // index where to cut or split
     const cutIndex = firstSigFig + targetBits;
-    const intLen = decimalPointIndex === -1 ? magnitude.length : decimalPointIndex;
 
-    let prefix: number[];
-    let suffix: number[];
-    let pointIndex: number;
+    // Build kept prefix
+    let prefix = magnitude.slice(0, Math.min(cutIndex, magnitude.length));
 
-    // extract kept prefix and construct required trailing integer zeros if cut occurs before decimal point
-    if (cutIndex < intLen) {
-        prefix = magnitude.slice(0, cutIndex);
-        suffix = new Array(intLen - cutIndex).fill(0);
-        pointIndex = -1;
-    } else {
-        prefix = magnitude.slice(0, cutIndex);
-        while (prefix.length < cutIndex) {
+    // For whole numbers (no decimal point or decimal point after cut), 
+    // pad with trailing zeros to maintain the original number's magnitude/place value
+    if (decimalPointIndex === -1 || cutIndex <= decimalPointIndex) {
+        const fullLength = decimalPointIndex === -1 ? magnitude.length : decimalPointIndex;
+        while (prefix.length < fullLength) {
             prefix.push(0);
         }
-        suffix = [];
-        pointIndex = decimalPointIndex;
     }
 
-    let carry = 1;      // initialize to 1 for addition at LSB
+    let pointIndex = decimalPointIndex;
+    let carry = 1;
 
-    // increments binary number
-    for (let i = prefix.length - 1; i >= 0; i--) {
+    // Perform binary increment on the prefix at the cutoff point
+    const incPos = (decimalPointIndex === -1 || cutIndex <= decimalPointIndex)
+        ? Math.min(cutIndex, magnitude.length) - 1
+        : prefix.length - 1;
+
+    for (let i = incPos; i >= 0; i--) {
         let sumBit = prefix[i] + carry;
         prefix[i] = sumBit % 2;
         carry = Math.floor(sumBit / 2);
     }
 
-    // put carry overflow bit at start if carry remains at MSB position
     if (carry) {
         prefix.unshift(1);
         if (pointIndex !== -1) {
@@ -445,9 +454,9 @@ function incrementBinaryAtCut(binaryInput: FormattedBinaryInput, targetBits: num
         }
     }
 
-    let combined = [...prefix, ...suffix];
+    let combined = [...prefix];
 
-    // strip unnecessary trailing zeros after fractional point
+    // Strip trailing zeros only if there is a fractional part
     while (
         pointIndex !== -1 &&
         combined.length > pointIndex &&
@@ -456,12 +465,10 @@ function incrementBinaryAtCut(binaryInput: FormattedBinaryInput, targetBits: num
         combined.pop();
     }
 
-    // convert to whole number if fractional part was completely stripped
     if (pointIndex !== -1 && combined.length <= pointIndex) {
         pointIndex = -1;
     }
 
-    // return magnitude and new point index
     return {
         arithmeticMagnitude: combined,
         arithmeticPointIndex: pointIndex
@@ -542,64 +549,75 @@ function incrementDecimalString(keptStr: string, fracDigits: number): string {
     return str;
 }
 
+// Helper function to attach the sign bit to the result array if input is signed
+function formatOutputWithSignBit( binaryInput: FormattedBinaryInput, magnitude: number[], pointIndex: number): { arithmeticMagnitude: number[]; arithmeticPointIndex: number } {
+    if (binaryInput.signed && binaryInput.signBit !== -1) {
+        return {
+            arithmeticMagnitude: [binaryInput.signBit, ...magnitude],
+            arithmeticPointIndex: pointIndex === -1 ? -1 : pointIndex + 1   // Shift fractional point index by 1 due to prepended sign bit
+        };
+    }
+    return {
+        arithmeticMagnitude: magnitude,
+        arithmeticPointIndex: pointIndex
+    };
+}
+
 // --------------------------------------------------
 // TRUNCATION (RTZ) - cuts off until target number of bits
 
 // handles the truncation for binary numbers
 function truncateBinary(binaryInput: FormattedBinaryInput, targetBits: number): ArithmeticBinaryResult {
     const { magnitude, decimalPointIndex } = binaryInput;
-    const { guardBit, stickyAny } = getBinaryGuardAndSticky(binaryInput, targetBits);   // get guard bit and sticky
+    const { guardBit, stickyAny } = getBinaryGuardAndSticky(binaryInput, targetBits);
 
-    // Find the first non-zero bit (first significant figure)
+    // get index of first significant bit
     const firstSigFig = findFirstSigFig(magnitude);
 
     // if input is 0 return 0
     if (firstSigFig === -1) {
+        const output = formatOutputWithSignBit(binaryInput, [0], -1);
         return {
-            arithmeticMagnitude: [0],
-            arithmeticPointIndex: -1,
+            arithmeticMagnitude: output.arithmeticMagnitude,
+            arithmeticPointIndex: output.arithmeticPointIndex,
             guardBit: 0,
             stickyAny: false,
             roundedUp: false
         };
     }
 
-    // get length
-    const intLen = decimalPointIndex === -1 ? magnitude.length : decimalPointIndex;
-    
-    // Determine the end index of bits to keep
     const keepEndIndex = firstSigFig + targetBits;
+    let keptMagnitude = magnitude.slice(0, Math.min(keepEndIndex, magnitude.length));
 
-    // magnitude of the bits to keep
-    let keptMagnitude: number[];
-    let newPointIndex = decimalPointIndex;  // stores new decimal point index
-
-    // zero-pad whole numbers if cutIndex happens before decimal point
-    if (keepEndIndex < intLen) {
-        const kept = magnitude.slice(0, keepEndIndex);
-        const zeroPadding = new Array(intLen - keepEndIndex).fill(0);
-        keptMagnitude = [...kept, ...zeroPadding];
-        newPointIndex = -1;
-    } else {
-        keptMagnitude = magnitude.slice(0, Math.min(keepEndIndex, magnitude.length));
-
-        // trim trailing fractional zeros
-        while (
-            newPointIndex !== -1 &&
-            keptMagnitude.length > newPointIndex &&
-            keptMagnitude[keptMagnitude.length - 1] === 0
-        ) {
-            keptMagnitude.pop();
-        }
-
-        if (newPointIndex !== -1 && keptMagnitude.length <= newPointIndex) {
-            newPointIndex = -1;
+    // Pad whole numbers with zeros up to the integer length to preserve place value
+    if (decimalPointIndex === -1 || keepEndIndex <= decimalPointIndex) {
+        const fullLength = decimalPointIndex === -1 ? magnitude.length : decimalPointIndex;
+        while (keptMagnitude.length < fullLength) {
+            keptMagnitude.push(0);
         }
     }
 
+    let newPointIndex = decimalPointIndex;
+
+    // Trim trailing fractional zeros only if a decimal point exists
+    while (
+        newPointIndex !== -1 &&
+        keptMagnitude.length > newPointIndex &&
+        keptMagnitude[keptMagnitude.length - 1] === 0
+    ) {
+        keptMagnitude.pop();
+    }
+
+    if (newPointIndex !== -1 && keptMagnitude.length <= newPointIndex) {
+        newPointIndex = -1;
+    }
+
+    // attach sign bit to output
+    const output = formatOutputWithSignBit(binaryInput, keptMagnitude, newPointIndex);
+
     return {
-        arithmeticMagnitude: keptMagnitude,
-        arithmeticPointIndex: newPointIndex,
+        arithmeticMagnitude: output.arithmeticMagnitude,
+        arithmeticPointIndex: output.arithmeticPointIndex,
         guardBit,
         stickyAny,
         roundedUp: false
@@ -669,8 +687,9 @@ function truncateDec(input: number, targetDigits: number, rawStr?: string): Deci
 function roundUpBinary(binaryInput: FormattedBinaryInput, targetBits: number): ArithmeticBinaryResult {
     const truncated = truncateBinary(binaryInput, targetBits);
 
-    // negative binary values round to positive infinity via truncation (so no magnitude increment)
-    if (binaryInput.signed && binaryInput.signBit === 1) {
+    // negative binary values round toward positive infinity via truncation
+    const isNegative = binaryInput.signed && binaryInput.signBit === 1;
+    if (isNegative) {
         return truncated;
     }
 
@@ -684,11 +703,13 @@ function roundUpBinary(binaryInput: FormattedBinaryInput, targetBits: number): A
     // increment magnitude if positive and non-zero bits were discarded
     if (hasNonZeroDiscarded) {
         const inc = incrementBinaryAtCut(binaryInput, targetBits);
+
+        // attach sign bit to final magnitude array
+        const output = formatOutputWithSignBit(binaryInput, inc.arithmeticMagnitude, inc.arithmeticPointIndex);
         return {
-            arithmeticMagnitude: inc.arithmeticMagnitude,
-            arithmeticPointIndex: inc.arithmeticPointIndex,
-            guardBit: truncated.guardBit,
-            stickyAny: truncated.stickyAny,
+            ...truncated,
+            arithmeticMagnitude: output.arithmeticMagnitude,
+            arithmeticPointIndex: output.arithmeticPointIndex,
             roundedUp: true
         };
     }
@@ -750,13 +771,13 @@ function roundUpDec(input: number, targetDigits: number, rawStr?: string): Decim
 // --------------------------------------------------
 // ROUND DOWN (RTN) - round towards negative infinity
 
-
 // handles rounding down for binary numbers
 function roundDownBinary(binaryInput: FormattedBinaryInput, targetBits: number): ArithmeticBinaryResult {
     const truncated = truncateBinary(binaryInput, targetBits);
 
-    // positive binary values round to negative infinity via truncation
-    if (!binaryInput.signed || binaryInput.signBit === 0) {
+    // positive binary numbers (signed or unsigned) round towards negative infinity via truncation
+    const isNegative = binaryInput.signed && binaryInput.signBit === 1;
+    if (!isNegative) {
         return truncated;
     }
 
@@ -770,11 +791,13 @@ function roundDownBinary(binaryInput: FormattedBinaryInput, targetBits: number):
     // increment negative magnitude if non-zero bits were discarded
     if (hasNonZeroDiscarded) {
         const inc = incrementBinaryAtCut(binaryInput, targetBits);
+
+        // attach sign bit to final magnitude array
+        const output = formatOutputWithSignBit(binaryInput, inc.arithmeticMagnitude, inc.arithmeticPointIndex);
         return {
-            arithmeticMagnitude: inc.arithmeticMagnitude,
-            arithmeticPointIndex: inc.arithmeticPointIndex,
-            guardBit: truncated.guardBit,
-            stickyAny: truncated.stickyAny,
+            ...truncated,
+            arithmeticMagnitude: output.arithmeticMagnitude,
+            arithmeticPointIndex: output.arithmeticPointIndex,
             roundedUp: true
         };
     }
@@ -863,11 +886,13 @@ function roundNearBinary(binaryInput: FormattedBinaryInput, targetBits: number):
 
     if (shouldIncrement) {
         const inc = incrementBinaryAtCut(binaryInput, targetBits);
+
+        // attach sign bit to final magnitude array
+        const output = formatOutputWithSignBit(binaryInput, inc.arithmeticMagnitude, inc.arithmeticPointIndex);
         return {
-            arithmeticMagnitude: inc.arithmeticMagnitude,
-            arithmeticPointIndex: inc.arithmeticPointIndex,
-            guardBit,
-            stickyAny,
+            ...truncated,
+            arithmeticMagnitude: output.arithmeticMagnitude,
+            arithmeticPointIndex: output.arithmeticPointIndex,
             roundedUp: true
         };
     }
