@@ -17,9 +17,6 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: CSARCH2ComputingMachine2/machine-2
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,6 +33,7 @@ jobs:
         with:
           node-version: "20"
           cache: npm
+          cache-dependency-path: machine-2/package-lock.json
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -45,21 +43,23 @@ jobs:
       - name: Restore cache
         uses: actions/cache@v4
         with:
-          path: .next/cache
-          key: ${{ runner.os }}-nextjs-${{ hashFiles('package-lock.json') }}-${{ hashFiles('**.[jt]s', '**.[jt]sx') }}
+          path: machine-2/.next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('machine-2/package-lock.json') }}-${{ hashFiles('machine-2/**.[jt]s', 'machine-2/**.[jt]sx') }}
           restore-keys: |
-            ${{ runner.os }}-nextjs-${{ hashFiles('package-lock.json') }}-
+            ${{ runner.os }}-nextjs-${{ hashFiles('machine-2/package-lock.json') }}-
 
       - name: Install dependencies
+        working-directory: machine-2
         run: npm ci
 
       - name: Build with Next.js
+        working-directory: machine-2
         run: npx next build
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./out
+          path: machine-2/out
 
   deploy:
     environment:
