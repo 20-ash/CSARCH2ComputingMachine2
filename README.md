@@ -105,6 +105,14 @@ The backend implements IEEE 754 single‑precision addition and multiplication v
 
   ![Convert Negative Infinity Edge Case](convertinfinitynega.png)
 
+- **Convert Zero**
+
+  ![Convert Negative Infinity Edge Case](convertzero.png)
+
+- **Convert Negative Zero**
+
+  ![Convert Negative Infinity Edge Case](convertzeronega.png)
+
 ## 4. Video Walkthrough
 
 WE APPEND OUR VIDEO.
