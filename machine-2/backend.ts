@@ -966,9 +966,9 @@ function roundNearDec(input: number, targetDigits: number, rawStr?: string): Dec
     return truncated;
 }
 
-// --------------------------------------------------
+// ------------------------------------------------------------------------------------
 // 3. Perform arithmetic operations (addition and multiplication) using rounding method
-// --------------------------------------------------
+// ------------------------------------------------------------------------------------
 
 // Unpack IEEE binary string (sign, exponent, mantissa)
 function unpackIEEE(binStr: string) {
