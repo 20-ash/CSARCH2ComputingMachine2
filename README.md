@@ -264,14 +264,32 @@ The backend implements IEEE 754 single‑precision addition and multiplication v
   ![Round Negative Binary Infinity Edge Case-1](roundBinInfinity-N1.png)
   ![Round Negative Binary Infinity Edge Case-2](roundBinInfinity-N2.png)
 
-- **Add Signed Zero**
-
-  ![Add Zero-1](AddZero.png)
-  ![Add Signed Zero-2](SignedBinary-N2.png)
 
 - **Add Exact Decimal (HEX)**
 
-  ![Add Exact Decimal](AddZero.png)
+  ![Add Exact Decimal](addhexexactdecimal.png)
+
+- **Add Misalignment (HEX)**
+
+  ![Add Misalignment](addhexmisalignment.png)
+
+- **Add Mixed Signs (HEX)**
+
+  ![Add Mixed Signs](addhexmixedsigns.png)
+
+- **Add Negatives (HEX)**
+
+  ![Add Negatives](addhexnegatives.png)
+
+- **Add Precision (HEX)**
+
+  ![Add Precision](addhexprecision.png)
+
+- **Add Zero (HEX)**
+
+  ![Add Zero](addhexzero.png)
+  ![Add Signed Zero](addhexsignedzero.png)
+
 
 
 
