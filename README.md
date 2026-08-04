@@ -77,7 +77,33 @@ The backend implements IEEE 754 single‑precision addition and multiplication v
 
 ## 3. Screenshots
 
-WE APPEND OUR SCREENSHOTS.
+- **Convert Normal**
+
+  ![Convert Normal](convertnormal.png)
+
+- **Convert Negative Normal**
+
+  ![Convert Negative Normal](convertnormalnega.png)
+
+- **Convert Denormalized**
+
+  ![Convert Denormalized](convertdenormalized.png)
+
+- **Convert Negative Denormalized**
+
+  ![Convert Negative Denormalized](convertdenormalizednega.png)
+
+- **Convert Error Checking**
+
+  ![Convert Error Checking](converterror.png)
+
+- **Convert Positive Infinity Edge Case**
+
+  ![Convert Positive Infinity Edge Case](convertinfinity.png)
+
+- **Convert Negative Infinity Edge Case**
+
+  ![Convert Negative Infinity Edge Case](convertinfinitynega.png)
 
 ## 4. Video Walkthrough
 
