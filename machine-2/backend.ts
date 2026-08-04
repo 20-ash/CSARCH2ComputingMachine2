@@ -1001,6 +1001,7 @@ export function ieeeAdd(a: number, b: number) {
         const B = convert(b); // Convert operand b for full operand info
         return {
             result: NaN,
+            decimal: NaN,
             binary: "NaN",
             hex: "7FC00000", // Canonical quiet NaN encoding
             operands: { a: A, b: B }, // Include operand details for consistency
@@ -1017,6 +1018,7 @@ export function ieeeAdd(a: number, b: number) {
             (Object.is(a, Infinity) && Object.is(b, -Infinity))) {
             return {
                 result: NaN,
+                decimal: NaN,
                 binary: "NaN",
                 hex: "7FC00000",
                 operands: { a: A, b: B },
@@ -1027,6 +1029,7 @@ export function ieeeAdd(a: number, b: number) {
         const isPositive = Object.is(a, Infinity) || Object.is(b, Infinity);
         return {
             result: isPositive ? Infinity : -Infinity,
+            decimal: isPositive ? Infinity : -Infinity,
             binary: isPositive ? "0 11111111 00000000000000000000000" : "1 11111111 00000000000000000000000", // Infinity = all-1 exponent + all-0 mantissa
             hex: isPositive ? "7F800000" : "FF800000", // +∞ = 0x7F800000, -∞ = 0xFF800000
             operands: { a: A, b: B },
@@ -1047,7 +1050,8 @@ export function ieeeAdd(a: number, b: number) {
         stepByStep, // Standard IEEE addition steps
         binary: resConverted.binary, // Final binary encoding
         hex: resConverted.hex, // Final hex encoding
-        decimal: sumVal // Actual numeric result
+        decimal: sumVal, // Actual numeric result
+        result: sumVal // Actual numeric result
     };
 }
 
@@ -1062,6 +1066,7 @@ export function ieeeMul(a: number, b: number) {
         const B = convert(b); // Convert operand b for full operand info
         return {
             result: NaN,
+            decimal: NaN,
             binary: "NaN",
             hex: "7FC00000", // Canonical NaN encoding
             operands: { a: A, b: B }, // Include operand details for consistency
@@ -1080,6 +1085,7 @@ export function ieeeMul(a: number, b: number) {
         const isNegZero = aIsNegZero !== bIsNegZero;
         return {
             result: isNegZero ? -0 : 0, // Preserve correct signed zero
+            decimal: isNegZero ? -0 : 0, // Preserve correct signed zero
             binary: isNegZero ? "1 00000000 00000000000000000000000" : "0 00000000 00000000000000000000000", // IEEE 754 zero format
             hex: isNegZero ? "80000000" : "00000000", // -0 = 0x80000000, +0 = 0x00000000
             operands: { a: A, b: B }, // Include operand details for consistency
@@ -1096,6 +1102,7 @@ export function ieeeMul(a: number, b: number) {
             (Object.is(a, -Infinity) && Object.is(b, Infinity))) {
             return {
                 result: NaN,
+                decimal: NaN,
                 binary: "NaN",
                 hex: "7FC00000",
                 operands: { a: A, b: B },
@@ -1106,6 +1113,7 @@ export function ieeeMul(a: number, b: number) {
         const isNeg = Object.is(a, -Infinity) || Object.is(b, -Infinity);
         return {
             result: isNeg ? -Infinity : Infinity,
+            decimal: isNeg ? -Infinity : Infinity,
             binary: isNeg ? "1 11111111 00000000000000000000000" : "0 11111111 00000000000000000000000", // Infinity = all-1 exponent + all-0 mantissa
             hex: isNeg ? "FF800000" : "7F800000", // -∞ = 0xFF800000, +∞ = 0x7F800000
             operands: { a: A, b: B },
@@ -1125,6 +1133,7 @@ export function ieeeMul(a: number, b: number) {
         stepByStep, // Standard IEEE multiplication steps
         binary: resConverted.binary, // Final binary encoding
         hex: resConverted.hex, // Final hex encoding
-        decimal: prodVal // Actual numeric result
+        decimal: prodVal, // Actual numeric result
+        result: prodVal // Actual numeric result
     };
 }
