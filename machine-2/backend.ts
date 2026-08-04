@@ -1027,33 +1027,50 @@ export function ieeeAdd(a: number, b: number) {
 
 // Perform multiplication
 export function ieeeMul(a: number, b: number) {
-    if (isNaN(a) || isNaN(b)) // handle NaN cases
-        return { result: NaN, binary: "NaN", hex: "7FC00000" }; // NaN
-    if (a === 0 || b === 0) // handle zero cases
-        return { result: 0, binary: "0 00000000 00000000000000000000000", hex: "00000000" }; // zero
-    if (!isFinite(a) || !isFinite(b)) { // handle infinity cases
-    // Opposite infinities then NaN
-    if ((Object.is(a, Infinity) && Object.is(b, -Infinity)) ||
-        (Object.is(a, -Infinity) && Object.is(b, Infinity)))
-        return { result: NaN, binary: "NaN", hex: "7FC00000" };
-    // Same sign infinity then preserve sign
-    const isNeg = Object.is(a, -Infinity) || Object.is(b, -Infinity);
-    return {
-        result: isNeg ? -Infinity : Infinity,
-        binary: isNeg ? "1 11111111 00000000000000000000000" : "0 11111111 00000000000000000000000",
-        hex: isNeg ? "FF800000" : "7F800000"
-    };
-}
-    const prodVal = a * b; // handle standard float arithmetic directly for baseline value
-    const A = convert(a); // convert operand a to IEEE 754 representation
-    const B = convert(b); // convert operand b to IEEE 754 representation
-    const resConverted = convert(prodVal); // handle exact conversion / float representation
+    // Handle NaN: if either operand is NaN, return canonical NaN
+    if (isNaN(a) || isNaN(b))
+        return { result: NaN, binary: "NaN", hex: "7FC00000" }; // NaN = sign 0, exponent all 1, mantissa non-zero
 
+    // Detect signed zero using Object.is (=== cannot distinguish 0 vs -0)
+    const aIsNegZero = Object.is(a, -0);
+    const bIsNegZero = Object.is(b, -0);
+    // If either operand is zero , compute signed zero result
+    if (Object.is(a, 0) || Object.is(b, 0)) {
+        // Sign of product: XOR of operand signs (different signs → negative zero)
+        const isNegZero = aIsNegZero !== bIsNegZero;
+        return {
+            result: isNegZero ? -0 : 0, // Preserve correct signed zero value
+            binary: isNegZero ? "1 00000000 00000000000000000000000" : "0 00000000 00000000000000000000000", // IEEE 754 zero format
+            hex: isNegZero ? "80000000" : "00000000" // -0 = 0x80000000, +0 = 0x00000000
+        };
+    }
+
+    // Handle infinity cases
+    if (!isFinite(a) || !isFinite(b)) {
+        // Opposite-sign infinities → NaN (∞ × -∞ = NaN)
+        if ((Object.is(a, Infinity) && Object.is(b, -Infinity)) ||
+            (Object.is(a, -Infinity) && Object.is(b, Infinity)))
+            return { result: NaN, binary: "NaN", hex: "7FC00000" };
+        // Same-sign infinities → preserve sign in result
+        const isNeg = Object.is(a, -Infinity) || Object.is(b, -Infinity);
+        return {
+            result: isNeg ? -Infinity : Infinity,
+            binary: isNeg ? "1 11111111 00000000000000000000000" : "0 11111111 00000000000000000000000", // Infinity = exponent all 1, mantissa all 0
+            hex: isNeg ? "FF800000" : "7F800000" // -∞ = 0xFF800000, +∞ = 0x7F800000
+        };
+    }
+    
+    const prodVal = a * b;   // Compute actual product value for baseline reference
+    const A = convert(a);   // Convert a to IEEE 754 single-precision representation
+    const B = convert(b);  // Convert b to IEEE 754 single-precision representation
+    const resConverted = convert(prodVal);   // Convert computed product back to standard IEEE format for verification
+
+    // Return full result set with metadata
     return {
-        operands: { a: A, b: B }, // store operands for reference
-        stepByStep: "Unpack → XOR sign → debias exponents → multiply mantissas → normalize → round → pack", // Enumerate steps taken
-        binary: resConverted.binary,
-        hex: resConverted.hex,
-        decimal: prodVal
-    }; // return result object with all relevant info
+        operands: { a: A, b: B }, // Store unpacked operand details for debugging
+        stepByStep: "Unpack → XOR sign → debias exponents → multiply mantissas → normalize → round → pack", // Multiplication algorithm steps
+        binary: resConverted.binary, // Final binary representation
+        hex: resConverted.hex, // Final hexadecimal representation
+        decimal: prodVal // Actual numeric result
+    };
 }
