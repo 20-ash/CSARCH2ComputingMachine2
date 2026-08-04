@@ -58,9 +58,22 @@ The backend implements four rounding modes for binary, decimal, and IEEE-754 sin
 
 ### 2.3. Arithmetic Methods
 
-`ieeeAdd` and `ieeeMul` implement IEEE 754 addition and multiplication by unpacking the 32-bit operands, performing the operation on mantissas and exponents, then rounding and repacking.
-**Addition pipeline:** unpack → align exponents (shift smaller mantissa right) → add/subtract mantissas → normalize → round → pack.
-**Multiplication pipeline:** unpack → XOR sign bits → add (debias) exponents → multiply mantissas → normalize → round → pack.
+The backend implements IEEE 754 single‑precision addition and multiplication via `ieeeAdd` and `ieeeMul`. Both functions handle special cases, operand preparation, computation, normalization, rounding, and final encoding — consistently returning valid 8‑digit uppercase hexadecimal values alongside binary and decimal outputs.
+
+**Special Case Handling**
+| Case | Binary Representation | Hex Value |
+|---|---|---|
+| Positive Zero | `0 00000000 00000000000000000000000` | `00000000` |
+| Negative Zero | `1 00000000 00000000000000000000000` | `80000000` |
+| Positive Infinity | `0 11111111 00000000000000000000000` | `7F800000` |
+| Negative Infinity | `1 11111111 00000000000000000000000` | `FF800000` |
+| NaN (Not a Number) | — | `7FC00000` |
+
+**Addition Pipeline**
+`ieeeAdd` → Convert operands → Unpack sign, exponent, mantissa → Align exponents by right‑shifting the smaller mantissa → Add or subtract mantissas based on sign → Normalize result → Apply rounding → Re‑encode exponent and mantissa → Assemble final binary and hexadecimal output.
+
+**Multiplication Pipeline**
+`ieeeMul` → Convert operands → Unpack sign, exponent, mantissa → Compute result sign via XOR → Sum de‑biased exponents and adjust bias → Multiply mantissas → Normalize result → Apply rounding → Re‑encode exponent and mantissa → Assemble final binary and hexadecimal output.
 
 ## 3. Screenshots
 
