@@ -110,6 +110,11 @@ The backend implements IEEE 754 single‑precision addition and multiplication v
   ![Round Positive Decimal-1](Decimal_Positive-1.png)
   ![Round Positive Decimal-2](Decimal_Positive-2.png)
 
+- **Round Negative Decimal**
+
+  ![Round Negative Decimal-1](Decimal_Negative-1.png)
+  ![Round Negative Decimal-2](Decimal_Negative-2.png)
+
 ## 4. Video Walkthrough
 
 WE APPEND OUR VIDEO.
