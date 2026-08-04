@@ -308,5 +308,5 @@ The backend implements IEEE 754 single‑precision addition and multiplication v
   ![Multiply Underflow](mulunderflowhex.png)
 
 ## 4. Video Walkthrough
-
-WE APPEND OUR VIDEO.
+Click the link to watch the group walkthrough the app.
+[YouTube Link](https://youtu.be/9HPckJNPP4Q)
