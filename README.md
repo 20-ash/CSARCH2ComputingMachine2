@@ -140,6 +140,74 @@ The backend implements IEEE 754 single‑precision addition and multiplication v
   ![Round Signed Binary Negative-1](SignedBinary-N1.png)
   ![Round Signed Binary Negative-2](SignedBinary-N2.png)
 
+- **Add Basic Positive Integers**
+
+  ![Add Basic Positive Integers](addbasicpositiveintegers.png)
+
+- **Add Different Alignment**
+
+  ![Add Different Alignment](adddiferentalignment.png)
+
+- **Add Exact Decimal**
+
+  ![Add Exact Decimal](addexactdecimal.png)
+
+- **Add Mixed Signs**
+
+  ![Add Mixed Signs](addmixedsigns.png)
+
+- **Add Negatives**
+
+  ![Add Negatives](addnegatives.png)
+
+- **Add Precision Rounding**
+
+  ![Add Precision Rounding](addprecisionrounding.png)
+
+- **Add Overflow**
+
+  ![Add Overflow](AddOverflow.png)
+
+- **Add Zero**
+
+  ![Add Zero](AddZero.png)
+
+- **Multiply Basic Positive Integers**
+
+  ![Multiply Basic Positive Integers](mulbasicpositiveintegers.png)
+
+- **Multiply Decimal Integer**
+
+  ![Multiply Decimal Integer](muldecimalinteger.png)
+
+- **Multiply Fractions**
+
+  ![Multiply Fractions](mulfractions.png)
+
+- **Multiply Mixed Signs**
+
+  ![Multiply Mixed Signs](mulmixedsigns.png)
+
+- **Multiply NaN**
+
+  ![Multiply NaN](mulnan.png)
+
+- **Multiply Negatives**
+
+  ![Multiply Negatives](mulnegatives.png)
+
+- **Multiply Overflow**
+
+  ![Multiply Overflow](muloverflow.png)
+
+- **Multiply Underflow**
+
+  ![Multiply Underflow](mulunderflow.png)
+
+- **Multiply Zero Rule**
+
+  ![Multiply Zero Rule](mulzerorule.png)
+
 - **Round Signed Positive Binary Infinity Edge Case**
 
   ![Round Positive Binary Infinity Edge Case-1](roundBinInfinity-P1.png)
