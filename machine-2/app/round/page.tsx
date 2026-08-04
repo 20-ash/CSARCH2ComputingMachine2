@@ -682,6 +682,8 @@ export default function RoundPage() {
                             fontFamily: "'JetBrains Mono', monospace",
                             fontSize: 12,
                             letterSpacing: 0.5,
+                            overflowWrap: "anywhere",
+                            wordBreak: "break-all",
                           }}
                         >
                           {r.fullBinary}
