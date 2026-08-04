@@ -103,7 +103,7 @@ function inputToDecimal(raw: string, format: InputFormat): number {
 /** Converts a stored float value to an exact fixed-point binary string. */
 function decimalToBinaryString(value: number): string {
   if (Number.isNaN(value)) return "NaN";
-  if (!Number.isFinite(value)) return value > 0 ? "Infinity" : "-Infinity";
+  if (!Number.isFinite(value)) return value > 0 ? "+Infinity" : "-Infinity";
   if (value === 0) return Object.is(value, -0) ? "-0" : "0";
 
   const sign = value < 0 ? "-" : "";
@@ -132,6 +132,9 @@ function formatStoredValue(
   hex: string, 
   breakdown?: Float32Breakdown
 ): string {
+  if (value === Infinity) return "+Infinity";
+  if (value === -Infinity) return "-Infinity";
+
   if (breakdown && (breakdown as any).customBinaryString && format === "binary") {
     return (breakdown as any).customBinaryString;
   }
@@ -270,6 +273,44 @@ export default function RoundPage() {
         setStatus("error");
         setErrorMsg(err instanceof Error ? err.message : "Invalid input format.");
         setCompare(null);
+        return;
+      }
+
+      // handle infinity / overflow decimal values
+      if (!Number.isFinite(decimalValue)) {
+        const buildInfBreakdown = (mode: RoundingMode): Float32Breakdown => {
+          const signBit: 0 | 1 = decimalValue < 0 ? 1 : 0;
+          return {
+            input: decimalValue,
+            mode,
+            targetBits: parsedTarget,
+            sign: signBit,
+            exponentUnbiased: 128,
+            exponentBiased: 255,
+            exponentBits: "11111111",
+            mantissaBits: "0".repeat(parsedTarget),
+            sourceSignificand: "1" + "0".repeat(52),
+            roundBit: "0",
+            stickyBits: "",
+            stickyAny: false,
+            roundedUp: false,
+            mantissaCarried: false,
+            fullBinary: `${signBit}11111111${"0".repeat(23)}`,
+            hex: signBit ? "0xFF800000" : "0x7F800000",
+            storedValue: decimalValue > 0 ? Infinity : -Infinity,
+            specialCase: "overflow",
+          };
+        };
+
+        setCompare({
+          results: {
+            "nearest-even": buildInfBreakdown("nearest-even"),
+            "toward-zero": buildInfBreakdown("toward-zero"),
+            "toward-positive": buildInfBreakdown("toward-positive"),
+            "toward-negative": buildInfBreakdown("toward-negative"),
+          },
+        });
+        setStatus("idle");
         return;
       }
 
@@ -429,7 +470,7 @@ export default function RoundPage() {
   );
 }
 
-/* ---------- presentational helpers (mirrors app/convert/page.tsx) ---------- */
+/* ---------- presentational helpers ---------- */
 
 function ModeBreakdownCard({
   label,
@@ -454,26 +495,24 @@ function ModeBreakdownCard({
         />
       </div>
 
-      {!breakdown.specialCase && (
-        <div style={{ marginTop: 16 }}>
-          <div style={rowStyle}>
-            <Stat label="Guard/round bit" value={breakdown.roundBit} mono />
-            <Stat label="Sticky (any 1s after)" value={breakdown.stickyAny ? "yes" : "no"} mono />
-            <Stat label="Rounded up?" value={breakdown.roundedUp ? "yes" : "no"} mono />
-            <Stat
-              label={`Stored value (${activeFormat.label.toLowerCase()})`}
-              value={formatStoredValue(breakdown.storedValue, inputFormat, breakdown.hex, breakdown)}
-              mono
-            />
-          </div>
-          {breakdown.mantissaCarried && (
-            <ErrorNote>
-              Rounding filled the mantissa to all 1s and carried into the exponent (23-bit
-              overflow), so the exponent increased by 1.
-            </ErrorNote>
-          )}
+      <div style={{ marginTop: 16 }}>
+        <div style={rowStyle}>
+          <Stat label="Guard/round bit" value={breakdown.roundBit} mono />
+          <Stat label="Sticky (any 1s after)" value={breakdown.stickyAny ? "yes" : "no"} mono />
+          <Stat label="Rounded up?" value={breakdown.roundedUp ? "yes" : "no"} mono />
+          <Stat
+            label={`Stored value (${activeFormat.label.toLowerCase()})`}
+            value={formatStoredValue(breakdown.storedValue, inputFormat, breakdown.hex, breakdown)}
+            mono
+          />
         </div>
-      )}
+        {breakdown.mantissaCarried && (
+          <ErrorNote>
+            Rounding filled the mantissa to all 1s and carried into the exponent (23-bit
+            overflow), so the exponent increased by 1.
+          </ErrorNote>
+        )}
+      </div>
     </Card>
   );
 }
@@ -557,12 +596,32 @@ function ErrorNote({ children }: { children: React.ReactNode }) {
 }
 
 function SpecialCaseNote({ breakdown }: { breakdown: Float32Breakdown }) {
+  const infString = breakdown.sign ? "-Infinity" : "+Infinity";
   const messages: Record<string, string> = {
     zero: "This value stores as signed zero — exponent and mantissa are all zero.",
-    overflow: "This magnitude is too large for float32 and stores as ±Infinity.",
+    overflow: `This magnitude is too large for float32 and stores as ${infString}.`,
     underflow:
       "This magnitude is too small for float32's normal range. This tool simplifies subnormal values and stores it as ±0.",
   };
+
+  if (breakdown.specialCase === "overflow") {
+    return (
+      <div
+        style={{
+          marginTop: 12,
+          color: "#b0c4de",
+          fontSize: 13,
+          background: "rgba(112, 145, 223, 0.15)",
+          border: "1px solid rgba(112, 145, 223, 0.35)",
+          borderRadius: 8,
+          padding: "8px 12px",
+        }}
+      >
+        {messages.overflow}
+      </div>
+    );
+  }
+
   return <ErrorNote>{messages[breakdown.specialCase as string]}</ErrorNote>;
 }
 
