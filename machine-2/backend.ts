@@ -1025,11 +1025,14 @@ export function ieeeAdd(a: number, b: number) {
     }; // return result object with all relevant info
 }
 
-// Perform multiplication
+// Perform Multiplication
 export function ieeeMul(a: number, b: number) {
     // 1. Force inputs to IEEE 754 Single Precision (32-bit)
     const a32 = Math.fround(a);
     const b32 = Math.fround(b);
+
+    const A = convert(a32);
+    const B = convert(b32);
 
     // Compute proper sign via XOR (different signs -> negative)
     const aIsNeg = Object.is(a32, -0) || a32 < 0;
@@ -1043,20 +1046,36 @@ export function ieeeMul(a: number, b: number) {
     const aIsInf = !Number.isFinite(a32) && !aIsNaN;
     const bIsInf = !Number.isFinite(b32) && !bIsNaN;
 
+    const baseMeta = {
+        operands: { a: A, b: B },
+        stepByStep: "Unpack → XOR sign → debias exponents → multiply mantissas → normalize → round → pack"
+    };
+
     // 2. Handle NaN Cases
     if (aIsNaN || bIsNaN) {
-        return { result: NaN, binary: "0 11111111 10000000000000000000000", hex: "7FC00000" };
+        return {
+            ...baseMeta,
+            decimal: NaN,
+            binary: "0 11111111 10000000000000000000000",
+            hex: "7FC00000"
+        };
     }
 
     // 3. Handle Infinity × Zero Edge Case FIRST (∞ × 0 = NaN)
     if ((aIsInf && bIsZero) || (bIsInf && aIsZero)) {
-        return { result: NaN, binary: "0 11111111 10000000000000000000000", hex: "7FC00000" };
+        return {
+            ...baseMeta,
+            decimal: NaN,
+            binary: "0 11111111 10000000000000000000000",
+            hex: "7FC00000"
+        };
     }
 
     // 4. Handle Zero Cases (Preserving Signed Zero)
     if (aIsZero || bIsZero) {
         return {
-            result: isResultNeg ? -0 : 0,
+            ...baseMeta,
+            decimal: isResultNeg ? -0 : 0,
             binary: isResultNeg ? "1 00000000 00000000000000000000000" : "0 00000000 00000000000000000000000",
             hex: isResultNeg ? "80000000" : "00000000"
         };
@@ -1065,7 +1084,8 @@ export function ieeeMul(a: number, b: number) {
     // 5. Handle Infinity Cases (Preserving Correct Sign)
     if (aIsInf || bIsInf) {
         return {
-            result: isResultNeg ? -Infinity : Infinity,
+            ...baseMeta,
+            decimal: isResultNeg ? -Infinity : Infinity,
             binary: (isResultNeg ? "1" : "0") + " 11111111 00000000000000000000000",
             hex: isResultNeg ? "FF800000" : "7F800000"
         };
@@ -1073,13 +1093,10 @@ export function ieeeMul(a: number, b: number) {
 
     // 6. Normal 32-bit Float Multiplication
     const prodVal = Math.fround(a32 * b32);
-    const A = convert(a32);
-    const B = convert(b32);
     const resConverted = convert(prodVal);
 
     return {
-        operands: { a: A, b: B },
-        stepByStep: "Unpack → XOR sign → debias exponents → multiply mantissas → normalize → round → pack",
+        ...baseMeta,
         binary: resConverted.binary,
         hex: resConverted.hex,
         decimal: prodVal
