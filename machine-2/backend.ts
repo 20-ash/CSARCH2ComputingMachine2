@@ -1032,14 +1032,18 @@ export function ieeeMul(a: number, b: number) {
     if (a === 0 || b === 0) // handle zero cases
         return { result: 0, binary: "0 00000000 00000000000000000000000", hex: "00000000" }; // zero
     if (!isFinite(a) || !isFinite(b)) { // handle infinity cases
-        const prodSign = (a * b > 0) || (Object.is(a, -0) !== Object.is(b, -0));
-        return {
-            result: a * b,
-            binary: (prodSign ? "0" : "1") + " 11111111 00000000000000000000000",
-            hex: prodSign ? "7F800000" : "FF800000"
-        }; // keep infinity and use the correct sign (+ / -)
-    }
-
+    // Opposite infinities then NaN
+    if ((Object.is(a, Infinity) && Object.is(b, -Infinity)) ||
+        (Object.is(a, -Infinity) && Object.is(b, Infinity)))
+        return { result: NaN, binary: "NaN", hex: "7FC00000" };
+    // Same sign infinity then preserve sign
+    const isNeg = Object.is(a, -Infinity) || Object.is(b, -Infinity);
+    return {
+        result: isNeg ? -Infinity : Infinity,
+        binary: isNeg ? "1 11111111 00000000000000000000000" : "0 11111111 00000000000000000000000",
+        hex: isNeg ? "FF800000" : "7F800000"
+    };
+}
     const prodVal = a * b; // handle standard float arithmetic directly for baseline value
     const A = convert(a); // convert operand a to IEEE 754 representation
     const B = convert(b); // convert operand b to IEEE 754 representation
