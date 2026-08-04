@@ -170,6 +170,30 @@ export default function RoundPage() {
       return;
     }
 
+    const trimmedInput = input.trim();
+
+    // validation for decimal numbers
+    if (inputFormat === "decimal") {
+      const isDecimal = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(trimmedInput);
+      if (!isDecimal) {
+        setStatus("error");
+        setErrorMsg("Decimal input can only contain digits (0–9), an optional sign (+/-), and a decimal point (e.g. -13.25).");
+        setCompare(null);
+        return;
+      }
+    }
+
+    // validation for binary numbers
+    if (inputFormat === "binary") {
+      const isBinary = /^[+-]?(?:[01]+(?:\.[01]*)?|\.[01]+)$/.test(trimmedInput);
+      if (!isBinary) {
+        setStatus("error");
+        setErrorMsg("Binary input can only contain 0s and 1s, an optional sign (+/-), and a single decimal point (e.g. -101.011).");
+        setCompare(null);
+        return;
+      }
+    }
+
     let cancelled = false;
     setStatus("loading");
 
