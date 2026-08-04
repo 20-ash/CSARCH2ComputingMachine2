@@ -33,14 +33,14 @@ console.log(`Input -8.75: ${JSON.stringify(convert(-8.75))}`);
 console.log(`Round Binary Unsigned Whole Tail>Mid (11101, target 2): ${JSON.stringify(roundingMethods("11101", "unsigned", "-1", "2", "binary"))}`);
 console.log(`Round Binary Unsigned Whole Exact Tie (11101, target 2): ${JSON.stringify(roundingMethods("11101", "signed", "1", "2", "binary"))}`);
 
-// Binary Error
-console.log(`Round Binary Unsigned Whole Exact Tie (11101, target 2): ${JSON.stringify(roundingMethods("aaa", "signed", "1", "2", "binary"))}`);
-
 // Binary - Fractions & Tie Breaks (LSB Parity)
 console.log(`Round Binary Tie to Odd LSB (1.011, target 2): ${JSON.stringify(roundingMethods("1.011", "unsigned", "-1", "2", "binary"))}`);
 console.log(`Round Binary Tie to Even LSB (1.101, target 2): ${JSON.stringify(roundingMethods("1.101", "unsigned", "-1", "2", "binary"))}`);
 console.log(`Round Binary Overflow Carry (1.111, target 2): ${JSON.stringify(roundingMethods("1.111", "unsigned", "-1", "2", "binary"))}`);
 console.log(`Round Binary Leading Zeros (0.001101, target 2): ${JSON.stringify(roundingMethods("0.001101", "unsigned", "-1", "2", "binary"))}`);
+
+// Binary Error
+console.log(`Round Binary Unsigned Whole Exact Tie (11101, target 2): ${JSON.stringify(roundingMethods("aaa", "signed", "1", "2", "binary"))}`);
 
 // Decimal - Positives & Tie Breaks
 console.log(`Round Dec Positive Tail>5 (12.367, target 3): ${JSON.stringify(roundingMethods("12.367", "unsigned", "-1", "3", "decimal"))}`);
@@ -52,6 +52,9 @@ console.log(`Round Dec Tie + Sticky (12.3501, target 3): ${JSON.stringify(roundi
 console.log(`Round Dec Small Frac (0.00456, target 2): ${JSON.stringify(roundingMethods("0.00456", "unsigned", "-1", "2", "decimal"))}`);
 console.log(`Round Dec Large Whole (123456, target 3): ${JSON.stringify(roundingMethods("123456", "unsigned", "-1", "3", "decimal"))}`);
 console.log(`Round Dec Sci Notation (1.2345e2, target 3): ${JSON.stringify(roundingMethods("1.2345e2", "unsigned", "-1", "3", "decimal"))}`);
+
+// Decimal
+console.log(`Round Dec Sci Notation (1.2345e2, target 3): ${JSON.stringify(roundingMethods("aaa", "unsigned", "-1", "3", "decimal"))}`);
 
 // IEEE-754 Inputs
 console.log(`Round IEEE Hex (3DCCCCCD, target 2): ${JSON.stringify(roundingMethods("3DCCCCCD", "unsigned", "-1", "2", "ieee"))}`);
