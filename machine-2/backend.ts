@@ -1043,6 +1043,7 @@ export function ieeeMul(a: number, b: number) {
             result: isNegZero ? -0 : 0, // Preserve correct signed zero value
             binary: isNegZero ? "1 00000000 00000000000000000000000" : "0 00000000 00000000000000000000000", // IEEE 754 zero format
             hex: isNegZero ? "80000000" : "00000000" // -0 = 0x80000000, +0 = 0x00000000
+             stepByStep: "Unpack → XOR sign → debias exponents → multiply mantissas → normalize → round → pack", // Multiplication algorithm steps
         };
     }
 
@@ -1058,6 +1059,7 @@ export function ieeeMul(a: number, b: number) {
             result: isNeg ? -Infinity : Infinity,
             binary: isNeg ? "1 11111111 00000000000000000000000" : "0 11111111 00000000000000000000000", // Infinity = exponent all 1, mantissa all 0
             hex: isNeg ? "FF800000" : "7F800000" // -∞ = 0xFF800000, +∞ = 0x7F800000
+            stepByStep: "Unpack → XOR sign → debias exponents → multiply mantissas → normalize → round → pack", // Multiplication algorithm steps
         };
     }
 
