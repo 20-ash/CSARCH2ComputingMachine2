@@ -293,13 +293,13 @@ export default function ArithmeticPage() {
 
                     <Step n={2} title={isAdd ? "Align Exponents" : "Compute Product Exponent"}>
                       {isAdd ? (
-                      <>
-                        Exponents are 2^${String(pA.unbiasedExp).replaceAll('$','')} and 2^${String(pB.unbiasedExp).replaceAll('$','')}.
-                        {pA.unbiasedExp === pB.unbiasedExp
-                          ? " Exponents are equal, no right-shift alignment required."
-                          : ` Shift the mantissa of the smaller magnitude right by ${Math.abs(pA.unbiasedExp - pB.unbiasedExp)} bit(s) to match exponent 2^${Math.max(pA.unbiasedExp, pB.unbiasedExp)}.`
-                        }
-                      </>
+                        <>
+                          Exponents are 2<sup>{pA.unbiasedExp}</sup> and 2<sup>{pB.unbiasedExp}</sup>.
+                          {pA.unbiasedExp === pB.unbiasedExp
+                            ? " Exponents are equal, no right-shift alignment required."
+                            : ` Shift the mantissa of the smaller magnitude right by ${Math.abs(pA.unbiasedExp - pB.unbiasedExp)} bit(s) to match exponent 2<sup>${Math.max(pA.unbiasedExp, pB.unbiasedExp)}</sup>.`
+                          }
+                        </>
                       ) : (
                         <>
                           Add unbiased exponents: {pA.unbiasedExp} + {pB.unbiasedExp} = {pA.unbiasedExp + pB.unbiasedExp}.
