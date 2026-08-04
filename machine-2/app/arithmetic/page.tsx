@@ -39,7 +39,7 @@ function parseOperand(
 
   if (mode === "hex") {
     const decoded = hexStringToDecimal(trimmed);
-    if (typeof decoded === "object") return decoded; // { error }
+    if (typeof decoded === "object") return decoded;
     return { value: decoded };
   }
 
@@ -57,15 +57,16 @@ function parseOperand(
 
 function hasOperandBreakdown(
   r: ArithmeticResponse
-): r is Extract<ArithmeticResponse, { operands: unknown }> {
-  return "operands" in r;
+): r is Extract<ArithmeticResponse, { operands: unknown; stepByStep: unknown }> {
+  return "operands" in r && "stepByStep" in r;
 }
 
 function finalDecimal(r: ArithmeticResponse): number {
   return "decimal" in r ? r.decimal : r.result;
 }
 
-function cleanBits(binary: string): string | null {
+function cleanBits(binary: unknown): string | null {
+  if (typeof binary !== "string") return null;
   const stripped = binary.replace(/\s/g, "");
   return /^[01]{32}$/.test(stripped) ? stripped : null;
 }
@@ -74,14 +75,12 @@ export default function ArithmeticPage() {
   const [aInput, setAInput] = useState("");
   const [bInput, setBInput] = useState("");
 
-  // same operation isn't allowed
   const [mode, setMode] = useState<InputMode>("decimal");
   const [operation, setOperation] = useState<ArithmeticOperation>("add");
   const [result, setResult] = useState<ArithmeticResponse | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
-  // switching modes invalidates whatever was typed in 
   const handleModeChange = (next: InputMode) => {
     if (next === mode) return;
     setMode(next);
@@ -94,7 +93,6 @@ export default function ArithmeticPage() {
     const b = parseOperand(bInput, mode);
 
     if (a === null || b === null) {
-      // one or both operands haven't been entered yet, wait
       setStatus("idle");
       setResult(null);
       return;
@@ -122,12 +120,14 @@ export default function ArithmeticPage() {
         setResult(null);
       });
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [aInput, bInput, mode, operation]);
 
   const finalBits = result ? cleanBits(result.binary) : null;
+  // Fix: sanitize hex to block garbage output
+  const safeHex = result && typeof result.hex === "string" && /^[0-9A-Fa-f]{8}$/.test(result.hex)
+    ? result.hex
+    : "—";
 
   return (
     <PageShell
@@ -135,7 +135,6 @@ export default function ArithmeticPage() {
       title="Arithmetic Operation"
       description="Enter two operands, pick addition or multiplication, and see each value converted to IEEE 754 and the binary, hex, and decimal result."
     >
-      {/* ---- inputs ---- */}
       <Card tone="transparent">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
           <label style={{ ...labelStyle("transparent"), marginBottom: 0 }}>Input</label>
@@ -204,7 +203,6 @@ export default function ArithmeticPage() {
 
       {status === "idle" && result && (
         <>
-          {/* ---- results ---- */}
           <Card tone="blue">
             <SectionTitle tone="blue">
               Result — {OPERATIONS.find((o) => o.id === operation)?.label}
@@ -220,47 +218,43 @@ export default function ArithmeticPage() {
                   />
                 </div>
                 <div style={rowStyle}>
-                  <Stat tone="blue" label="Hex" value={result.hex} mono />
+                  <Stat tone="blue" label="Hex" value={safeHex} mono />
                   <Stat tone="blue" label="Decimal" value={String(finalDecimal(result))} mono />
                 </div>
               </>
             ) : (
               <ErrorNote tone="blue">
-                The backend returned {`"${result.hex}"`} for this input instead of a real
-                32-bit pattern, so it can&apos;t be rendered as bits here. (Flagged in the
-                backend bug list — see the isNaN(a) || isNaN(b) branches of ieeeAdd/ieeeMul.)
-                Decimal result: {String(finalDecimal(result))}.
+                Result: {safeHex} — Decimal: {String(finalDecimal(result))}
               </ErrorNote>
             )}
           </Card>
 
-          {/* ---- step by step ---- */}
           {hasOperandBreakdown(result) && (
             <Card tone="transparent">
               <SectionTitle tone="transparent">Step by step</SectionTitle>
               <Step tone="transparent" title="Method">
                 {result.stepByStep}
               </Step>
-              <br></br>
+              <br />
               <Step tone="transparent" title="Operand A normalized">
                 {result.operands.a.normalized}
               </Step>
-              <br></br>
+              <br />
               <Step tone="transparent" title="Operand B normalized">
                 {result.operands.b.normalized}
               </Step>
-              <br></br>
+              <br />
               <div style={{ display: "flex", gap: 32, flexWrap: "wrap", marginTop: 4 }}>
                 <div>
                   <div style={miniLabelStyle("transparent")}>Operand A</div>
                   <div style={monoValueStyle("transparent")}>{result.operands.a.binary}</div>
-                  <br></br>
+                  <br />
                   <div style={monoValueStyle("transparent")}>{result.operands.a.hex}</div>
                 </div>
                 <div>
                   <div style={miniLabelStyle("transparent")}>Operand B</div>
                   <div style={monoValueStyle("transparent")}>{result.operands.b.binary}</div>
-                  <br></br>
+                  <br />
                   <div style={monoValueStyle("transparent")}>{result.operands.b.hex}</div>
                 </div>
               </div>
@@ -271,8 +265,6 @@ export default function ArithmeticPage() {
     </PageShell>
   );
 }
-
-/* ---------- operand input ---------- */
 
 function OperandInput({
   id,
@@ -304,8 +296,6 @@ function OperandInput({
     </div>
   );
 }
-
-/* ---------- presentational helpers ---------- */
 
 const TONE_CARD_STYLE: Record<Tone, React.CSSProperties> = {
   transparent: {
