@@ -140,26 +140,6 @@ The backend implements IEEE 754 single‑precision addition and multiplication v
   ![Round Signed Binary Negative-1](SignedBinary-N1.png)
   ![Round Signed Binary Negative-2](SignedBinary-N2.png)
 
-- **Round Signed Binary Positive Infinity**
-
-  ![Round Signed Binary Positive Infinity-1](SignedInfinityBinary-P1.png)
-  ![Round Signed Binary Positive Infinity-2](SignedInfinityBinary-P2.png)
-
-- **Round Signed Binary Negative Infinity**
-
-  ![Round Signed Binary Negative Infinity-1](SignedInfinityBinary-N1.png)
-  ![Round Signed Binary Negative Infinity-2](SignedInfinityBinary-N2.png)
-
-- **Round IEEE-754 Hex**
-
-  ![Round IEEE-754 Hex-1](ieeeHex-P1.png)
-  ![Round IEEE-754 Hex-2](ieeeHex-P2.png)
-
-- **Round IEEE-754 Binary**
-
-  ![Round IEEE-754 Binary-1](ieeeBinary-P1.png)
-  ![Round IEEE-754 Binary-2](ieeeBinary-P2.png)
-
 - **Add Basic Positive Integers**
 
   ![Add Basic Positive Integers](addbasicpositiveintegers.png)
