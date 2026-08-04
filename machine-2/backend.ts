@@ -750,7 +750,6 @@ function roundUpDec(input: number, targetDigits: number, rawStr?: string): Decim
 // --------------------------------------------------
 // ROUND DOWN (RTN) - round towards negative infinity
 
-
 // handles rounding down for binary numbers
 function roundDownBinary(binaryInput: FormattedBinaryInput, targetBits: number): ArithmeticBinaryResult {
     const truncated = truncateBinary(binaryInput, targetBits);
