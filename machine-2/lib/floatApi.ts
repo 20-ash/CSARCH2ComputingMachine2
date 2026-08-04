@@ -172,12 +172,14 @@ export async function computeArithmetic(req: ArithmeticRequest): Promise<Arithme
   // Cast through unknown first to satisfy TS type-check
   const result = rawResult as unknown as ArithmeticResult;
 
-  // Make SURE both numeric fields exist — fixes the "undefined vs number" error
+  // Make SURE both numeric fields exist
   result.result = result.decimal ?? result.result;
   result.decimal = result.result ?? result.decimal;
 
-  // Now safely set hex from the guaranteed‑valid number
-  result.hex = floatToCleanHex(result.decimal);
+  // NaN / ±Infinity / ±0 already have CORRECT hex from ieeeAdd/ieeeMul
+  if (Number.isFinite(result.decimal)) {
+    result.hex = floatToCleanHex(result.decimal);
+  }
 
   return result;
 }
