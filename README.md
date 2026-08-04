@@ -125,6 +125,10 @@ The backend implements IEEE 754 single‑precision addition and multiplication v
   ![Round Negative Decimal Infinity Edge Case-1](roundDecInfinity-N1.png)
   ![Round Negative Decimal Infinity Edge Case-2](roundDecInfinity-N2.png)
 
+- **Round Decimal Error Handling**
+
+  ![Round Decimal Error Handling](roundDecError.png)
+
 - **Round Unsigned Binary**
 
   ![Round Unsigned Binary-1](UnsignedBinary-1.png)
@@ -150,6 +154,14 @@ The backend implements IEEE 754 single‑precision addition and multiplication v
   ![Round Signed Binary Negative Infinity-1](SignedInfinityBinary-N1.png)
   ![Round Signed Binary Negative Infinity-2](SignedInfinityBinary-N2.png)
 
+- **Round Unsigned Binary Error Handling**
+
+  ![Round Unsigned Binary Error Handling](roundUbinaryError.png)
+
+- **Round Signed Binary Error Handling**
+
+  ![Round Signed Binary Error Handling](roundSbinaryError.png)
+
 - **Round IEEE-754 Hex**
 
   ![Round IEEE-754 Hex-1](ieeeHex-P1.png)
@@ -169,6 +181,10 @@ The backend implements IEEE 754 single‑precision addition and multiplication v
 
   ![Round IEEE-754 Binary-1](ieeeInfinity-N1.png)
   ![Round IEEE-754 Binary-2](ieeeInfinity-N2.png)
+
+- **Round IEEE-754 Error Handling**
+
+  ![Round IEEE-754 Error Handling](roundIEEE_Error.png)
 
 - **Add Basic Positive Integers**
 
