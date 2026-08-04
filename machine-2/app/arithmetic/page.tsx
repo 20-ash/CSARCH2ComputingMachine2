@@ -17,7 +17,6 @@ const OPERATIONS: { id: ArithmeticOperation; label: string; short: string }[] = 
 type Tone = "transparent" | "blue" | "white";
 type InputMode = "decimal" | "hex";
 
-
 function hexStringToDecimal(raw: string): number | { error: string } {
   const cleaned = raw.trim().replace(/^0x/i, "").replace(/\s+/g, "");
   if (!/^[0-9a-fA-F]{8}$/.test(cleaned)) {
@@ -39,7 +38,7 @@ function parseOperand(
 
   if (mode === "hex") {
     const decoded = hexStringToDecimal(trimmed);
-    if (typeof decoded === "object") return decoded; // { error }
+    if (typeof decoded === "object") return decoded;
     return { value: decoded };
   }
 
@@ -57,31 +56,55 @@ function parseOperand(
 
 function hasOperandBreakdown(
   r: ArithmeticResponse
-): r is Extract<ArithmeticResponse, { operands: unknown }> {
-  return "operands" in r;
+): r is Extract<ArithmeticResponse, { operands: unknown; stepByStep: unknown }> {
+  return "operands" in r && "stepByStep" in r;
 }
 
 function finalDecimal(r: ArithmeticResponse): number {
-  return "decimal" in r ? r.decimal : r.result;
+  if ("decimal" in r && typeof r.decimal === "number") {
+    return r.decimal;
+  }
+  if ("result" in r && typeof r.result === "number") {
+    return r.result;
+  }
+  return 0;
 }
 
-function cleanBits(binary: string): string | null {
+function cleanBits(binary: unknown): string | null {
+  if (typeof binary !== "string") return null;
   const stripped = binary.replace(/\s/g, "");
   return /^[01]{32}$/.test(stripped) ? stripped : null;
+}
+
+// Dissect a 32-bit binary string into IEEE 754 components
+function parseIEEEComponents(binStr: string) {
+  const clean = binStr.replace(/\s/g, "");
+  if (clean.length !== 32) return null;
+  const sign = clean[0];
+  const expBits = clean.slice(1, 9);
+  const mantBits = clean.slice(9);
+  const expVal = parseInt(expBits, 2);
+  const unbiasedExp = expVal - 127;
+  return {
+    sign,
+    expBits,
+    expVal,
+    unbiasedExp,
+    mantBits,
+    significand: `1.${mantBits}`,
+  };
 }
 
 export default function ArithmeticPage() {
   const [aInput, setAInput] = useState("");
   const [bInput, setBInput] = useState("");
 
-  // same operation isn't allowed
   const [mode, setMode] = useState<InputMode>("decimal");
   const [operation, setOperation] = useState<ArithmeticOperation>("add");
   const [result, setResult] = useState<ArithmeticResponse | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
-  // switching modes invalidates whatever was typed in 
   const handleModeChange = (next: InputMode) => {
     if (next === mode) return;
     setMode(next);
@@ -94,7 +117,6 @@ export default function ArithmeticPage() {
     const b = parseOperand(bInput, mode);
 
     if (a === null || b === null) {
-      // one or both operands haven't been entered yet, wait
       setStatus("idle");
       setResult(null);
       return;
@@ -128,6 +150,10 @@ export default function ArithmeticPage() {
   }, [aInput, bInput, mode, operation]);
 
   const finalBits = result ? cleanBits(result.binary) : null;
+  const safeHex =
+    result && typeof result.hex === "string" && /^[0-9A-Fa-f]{8}$/.test(result.hex)
+      ? result.hex
+      : "—";
 
   return (
     <PageShell
@@ -135,10 +161,9 @@ export default function ArithmeticPage() {
       title="Arithmetic Operation"
       description="Enter two operands, pick addition or multiplication, and see each value converted to IEEE 754 and the binary, hex, and decimal result."
     >
-      {/* ---- inputs ---- */}
       <Card tone="transparent">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
-          <label style={{ ...labelStyle("transparent"), marginBottom: 0 }}>Input</label>
+          <label style={{ ...labelStyle("transparent"), marginBottom: 0 }}>Input Mode</label>
           <div style={{ display: "flex", gap: 4 }}>
             {(["decimal", "hex"] as InputMode[]).map((m) => (
               <button
@@ -204,7 +229,6 @@ export default function ArithmeticPage() {
 
       {status === "idle" && result && (
         <>
-          {/* ---- results ---- */}
           <Card tone="blue">
             <SectionTitle tone="blue">
               Result — {OPERATIONS.find((o) => o.id === operation)?.label}
@@ -220,50 +244,95 @@ export default function ArithmeticPage() {
                   />
                 </div>
                 <div style={rowStyle}>
-                  <Stat tone="blue" label="Hex" value={result.hex} mono />
+                  <Stat tone="blue" label="Hex" value={safeHex} mono />
                   <Stat tone="blue" label="Decimal" value={String(finalDecimal(result))} mono />
                 </div>
               </>
             ) : (
               <ErrorNote tone="blue">
-                The backend returned {`"${result.hex}"`} for this input instead of a real
-                32-bit pattern, so it can&apos;t be rendered as bits here. (Flagged in the
-                backend bug list — see the isNaN(a) || isNaN(b) branches of ieeeAdd/ieeeMul.)
-                Decimal result: {String(finalDecimal(result))}.
+                Result: {safeHex} — Decimal: {String(finalDecimal(result))}
               </ErrorNote>
             )}
           </Card>
 
-          {/* ---- step by step ---- */}
           {hasOperandBreakdown(result) && (
             <Card tone="transparent">
-              <SectionTitle tone="transparent">Step by step</SectionTitle>
-              <Step tone="transparent" title="Method">
-                {result.stepByStep}
-              </Step>
-              <br></br>
-              <Step tone="transparent" title="Operand A normalized">
-                {result.operands.a.normalized}
-              </Step>
-              <br></br>
-              <Step tone="transparent" title="Operand B normalized">
-                {result.operands.b.normalized}
-              </Step>
-              <br></br>
-              <div style={{ display: "flex", gap: 32, flexWrap: "wrap", marginTop: 4 }}>
-                <div>
-                  <div style={miniLabelStyle("transparent")}>Operand A</div>
-                  <div style={monoValueStyle("transparent")}>{result.operands.a.binary}</div>
-                  <br></br>
-                  <div style={monoValueStyle("transparent")}>{result.operands.a.hex}</div>
-                </div>
-                <div>
-                  <div style={miniLabelStyle("transparent")}>Operand B</div>
-                  <div style={monoValueStyle("transparent")}>{result.operands.b.binary}</div>
-                  <br></br>
-                  <div style={monoValueStyle("transparent")}>{result.operands.b.hex}</div>
-                </div>
-              </div>
+              <SectionTitle tone="transparent">Step by step Solution</SectionTitle>
+
+              {(() => {
+                const pA = parseIEEEComponents(result.operands.a.binary);
+                const pB = parseIEEEComponents(result.operands.b.binary);
+                if (!pA || !pB) return null;
+
+                const isAdd = operation === "add";
+
+                return (
+                  <>
+                    {/* Step 1: Unpack Operands */}
+                    <Step n={1} title="Unpack IEEE 754 Operands">
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12, marginTop: 4 }}>
+                        <div style={operandCardStyle}>
+                          <div style={miniLabelStyle("transparent")}>Operand A ({result.operands.a.normalized})</div>
+                          <div>Sign: <strong>{pA.sign}</strong> | Exp: <strong>{pA.expBits}</strong> (2^{pA.unbiasedExp})</div>
+                          <div>Significand: <strong>{pA.significand}</strong></div>
+                        </div>
+                        <div style={operandCardStyle}>
+                          <div style={miniLabelStyle("transparent")}>Operand B ({result.operands.b.normalized})</div>
+                          <div>Sign: <strong>{pB.sign}</strong> | Exp: <strong>{pB.expBits}</strong> (2^{pB.unbiasedExp})</div>
+                          <div>Significand: <strong>{pB.significand}</strong></div>
+                        </div>
+                      </div>
+                    </Step>
+
+                    {/* Step 2: Exponent Handling */}
+                    <Step n={2} title={isAdd ? "Align Exponents" : "Compute Product Exponent"}>
+                      {isAdd ? (
+                        <>
+                          Exponents are 2^{pA.unbiasedExp} and 2^{pB.unbiasedExp}.
+                          {pA.unbiasedExp === pB.unbiasedExp
+                            ? " Exponents are equal, no right-shift alignment required."
+                            : ` Shift the mantissa of the smaller magnitude right by ${Math.abs(pA.unbiasedExp - pB.unbiasedExp)} bit(s) to match exponent 2^{Math.max(pA.unbiasedExp, pB.unbiasedExp)}.`}
+                        </>
+                      ) : (
+                        <>
+                          Add unbiased exponents: {pA.unbiasedExp} + {pB.unbiasedExp} = {pA.unbiasedExp + pB.unbiasedExp}.
+                          Re-bias with +127: {pA.unbiasedExp + pB.unbiasedExp} + 127 = {pA.unbiasedExp + pB.unbiasedExp + 127}.
+                        </>
+                      )}
+                    </Step>
+
+                    {/* Step 3: Significand / Mantissa Operation */}
+                    <Step n={3} title={isAdd ? "Add / Subtract Significands" : "Sign & Mantissa Multiplication"}>
+                      {isAdd ? (
+                        <>
+                          Perform binary addition/subtraction on aligned 24-bit significands ({pA.significand} and {pB.significand}).
+                        </>
+                      ) : (
+                        <>
+                          Sign bit = {pA.sign} ⊕ {pB.sign} = {Number(pA.sign) ^ Number(pB.sign)}.<br />
+                          Multiply 24-bit significands: ({pA.significand}) × ({pB.significand}).
+                        </>
+                      )}
+                    </Step>
+
+                    {/* Step 4: Normalization & Rounding */}
+                    <Step n={4} title="Normalize & Round (RNE)">
+                      Shift intermediate result into standard 1.mmmm format. Apply Round-to-Nearest, Ties-to-Even on discarded guard/round/sticky bits to fit 23 mantissa bits.
+                    </Step>
+
+                    {/* Step 5: Assemble Final Word */}
+                    <Step n={5} title="Assemble Final 32-bit Word">
+                      {finalBits ? (
+                        <>
+                          sign ({finalBits[0]}) + exponent ({finalBits.slice(1, 9)}) + mantissa ({finalBits.slice(9, 32)}) = <strong>{finalBits}</strong> ({safeHex})
+                        </>
+                      ) : (
+                        `Result: ${safeHex}`
+                      )}
+                    </Step>
+                  </>
+                );
+              })()}
             </Card>
           )}
         </>
@@ -271,8 +340,6 @@ export default function ArithmeticPage() {
     </PageShell>
   );
 }
-
-/* ---------- operand input ---------- */
 
 function OperandInput({
   id,
@@ -304,8 +371,6 @@ function OperandInput({
     </div>
   );
 }
-
-/* ---------- presentational helpers ---------- */
 
 const TONE_CARD_STYLE: Record<Tone, React.CSSProperties> = {
   transparent: {
@@ -368,29 +433,51 @@ function SectionTitle({ tone = "transparent", children }: { tone?: Tone; childre
 }
 
 function Step({
+  n,
   title,
   children,
   tone = "transparent",
 }: {
+  n: number;
   title: string;
   children: React.ReactNode;
   tone?: Tone;
 }) {
   return (
-    <div style={{ marginBottom: 14 }}>
-      <div style={{ color: titleColor(tone), fontSize: 13.5, fontWeight: 600, marginBottom: 3 }}>
-        {title}
-      </div>
+    <div style={{ display: "flex", gap: 14, marginBottom: 16 }}>
       <div
         style={{
-          color: bodyColor(tone),
-          fontSize: 13.5,
-          lineHeight: 1.6,
+          flexShrink: 0,
+          width: 26,
+          height: 26,
+          borderRadius: "50%",
+          background: "#4B3F72",
+          color: "#EAE3FF",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 12.5,
+          fontWeight: 700,
           fontFamily: "'JetBrains Mono', monospace",
-          wordBreak: "break-word",
         }}
       >
-        {children}
+        {n}
+      </div>
+      <div style={{ flex: 1 }}>
+        <div style={{ color: titleColor(tone), fontSize: 13.5, fontWeight: 600, marginBottom: 3 }}>
+          {title}
+        </div>
+        <div
+          style={{
+            color: bodyColor(tone),
+            fontSize: 13.5,
+            lineHeight: 1.6,
+            fontFamily: "'JetBrains Mono', monospace",
+            wordBreak: "break-word",
+          }}
+        >
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -481,15 +568,6 @@ function miniLabelStyle(tone: Tone): React.CSSProperties {
   };
 }
 
-function monoValueStyle(tone: Tone): React.CSSProperties {
-  return {
-    fontFamily: "'JetBrains Mono', monospace",
-    fontSize: 13,
-    color: tone === "white" ? "#1D2340" : "#E4E8FA",
-    wordBreak: "break-word",
-  };
-}
-
 const inputStyle: React.CSSProperties = {
   width: "100%",
   background: "rgba(6,11,36,0.7)",
@@ -517,6 +595,13 @@ const miniToggleStyle: React.CSSProperties = {
   fontSize: 10.5,
   fontFamily: "'JetBrains Mono', monospace",
   cursor: "pointer",
+};
+
+const operandCardStyle: React.CSSProperties = {
+  background: "rgba(6,11,36,0.6)",
+  border: "1px solid rgba(143,166,217,0.2)",
+  borderRadius: 8,
+  padding: "12px 14px",
 };
 
 const rowStyle: React.CSSProperties = {

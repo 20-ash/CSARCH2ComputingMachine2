@@ -36,6 +36,14 @@ function simulateLatency(ms = 150) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Always generate clean 8‑char uppercase hex from float
+function floatToCleanHex(value: number): string {
+  const buf = new ArrayBuffer(4);
+  const view = new DataView(buf);
+  view.setFloat32(0, value);
+  return view.getUint32(0).toString(16).padStart(8, "0").toUpperCase();
+}
+
 function convertToBreakdown(input: number, conv: ReturnType<typeof convert>): Float32Breakdown {
   const fullBinary = conv.binary.replaceAll(" ", "");
   const sign = fullBinary[0] === "1" ? 1 : 0;
@@ -70,7 +78,7 @@ function convertToBreakdown(input: number, conv: ReturnType<typeof convert>): Fl
     roundedUp: false,
     mantissaCarried: false,
     fullBinary,
-    hex: "0x" + conv.hex,
+    hex: floatToCleanHex(storedValue), // no more "0x" prefix, always valid 8 chars
     storedValue,
     specialCase,
   };
@@ -153,5 +161,13 @@ export async function computeArithmetic(req: ArithmeticRequest): Promise<Arithme
   // Unlike decimalToBinary/roundFloat, NaN and +/-Infinity are valid, intentional
   // inputs here — ieeeAdd/ieeeMul both special-case them internally. Rejecting
   // unparseable text (not NaN/Infinity) is handled by the page before this is called.
-  return req.operation === "add" ? ieeeAdd(req.a, req.b) : ieeeMul(req.a, req.b);
+  const result = req.operation === "add" ? ieeeAdd(req.a, req.b) : ieeeMul(req.a, req.b);
+  // Wrap and force valid hex on arithmetic results too
+ if (result && typeof result === "object") {
+    const num = "decimal" in result ? result.decimal : "result" in result ? result.result : NaN;
+    if (typeof num === "number") {
+      (result as any).hex = floatToCleanHex(num);
+    }
+  }
+  return result;
 }

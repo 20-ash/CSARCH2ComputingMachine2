@@ -58,9 +58,11 @@ The backend implements four rounding modes for binary, decimal, and IEEE-754 sin
 
 ### 2.3. Arithmetic Methods
 
-`ieeeAdd` and `ieeeMul` implement IEEE 754 addition and multiplication by unpacking the 32-bit operands, performing the operation on mantissas and exponents, then rounding and repacking.
-**Addition pipeline:** unpack → align exponents (shift smaller mantissa right) → add/subtract mantissas → normalize → round → pack.
-**Multiplication pipeline:** unpack → XOR sign bits → add (debias) exponents → multiply mantissas → normalize → round → pack.
+`ieeeAdd` and `ieeeMul` implement IEEE 754 addition and multiplication by unpacking the 32-bit operands, performing the operation on mantissas and exponents, then rounding and repacking. 
+All special cases (e.g. NaN, zero, ±infinity) use standard IEEE 754 hex values, and all outputs consistently return a valid 8‑digit hexadecimal string.
+
+- **Addition pipeline:** unpack → align exponents (shift smaller mantissa right) → add/subtract mantissas → normalize → round → pack.
+- **Multiplication pipeline:** unpack → XOR sign bits → add (debias) exponents → multiply mantissas → normalize → round → pack.
 
 ## 3. Screenshots
 

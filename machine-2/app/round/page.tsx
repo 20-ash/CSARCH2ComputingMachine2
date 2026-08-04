@@ -9,6 +9,7 @@ import { ROUNDING_MODES, toFloat32Breakdown, type Float32Breakdown, type Roundin
 /* ---------- input format handling ---------- */
 
 type InputFormat = "decimal" | "binary" | "ieee";
+type SignedMode = "signed" | "unsigned";
 
 // Maximum representable finite value in IEEE-754 single precision
 const FLOAT32_MAX = 3.4028234663852886e38;
@@ -226,6 +227,7 @@ function formatStoredValue(
 
 export default function RoundPage() {
   const [inputFormat, setInputFormat] = useState<InputFormat>("decimal");
+  const [signedMode, setSignedMode] = useState<SignedMode>("signed");
   const [input, setInput] = useState(INPUT_FORMATS[0].default);
   const [targetBits, setTargetBits] = useState<string>("23");
   const [compare, setCompare] = useState<RoundCompareResponse | null>(null);
@@ -336,7 +338,7 @@ export default function RoundPage() {
       // remove sign for custom rounding backend processing
       const cleanInput = expandedInput.replace(/^[+-]/, "");
 
-      computeCustomRounding(cleanInput, "signed", signBit, targetBits, inputFormat)
+      computeCustomRounding(cleanInput, signedMode, signBit, targetBits, inputFormat)
         .then((res: any) => {
           if (cancelled || !res) return;
 
@@ -498,7 +500,7 @@ export default function RoundPage() {
     return () => {
       cancelled = true;
     };
-  }, [input, inputFormat, targetBits]);
+  }, [input, inputFormat, targetBits, signedMode]);
 
   const activeFormat = INPUT_FORMATS.find((f) => f.id === inputFormat)!;
 
@@ -534,9 +536,37 @@ export default function RoundPage() {
 
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
           <div style={{ flex: 1, minWidth: 240 }}>
-            <label style={labelStyle} htmlFor="decimal-input">
-              {activeFormat.label} input
-            </label>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <label style={{ ...labelStyle, marginBottom: 0 }} htmlFor="decimal-input">
+                {activeFormat.label} input
+              </label>
+
+              {inputFormat === "binary" && (
+                <div style={{ display: "flex", gap: 4 }}>
+                  {(["signed", "unsigned"] as SignedMode[]).map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setSignedMode(s)}
+                      style={{
+                        border: "1px solid",
+                        borderRadius: 6,
+                        padding: "2px 8px",
+                        fontSize: 10.5,
+                        fontFamily: "'JetBrains Mono', monospace",
+                        cursor: "pointer",
+                        background: signedMode === s ? "#4B3F72" : "rgba(6,11,36,0.7)",
+                        color: signedMode === s ? "#EAE3FF" : "#A9B3D6",
+                        borderColor: signedMode === s ? "#7091df" : "rgba(143,166,217,0.3)",
+                      }}
+                    >
+                      {s.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <input
               id="decimal-input"
               className="bfl-field"
