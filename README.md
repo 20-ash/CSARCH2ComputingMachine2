@@ -155,6 +155,13 @@ The backend implements IEEE 754 single‑precision addition and multiplication v
   ![Add Zero-1](AddZero.png)
   ![Add Signed Zero-2](SignedBinary-N2.png)
 
+  - **Add Exact Decimal (HEX) **
+
+  ![Add Exact Decimal](AddZero.png)
+
+  - **Add Basic Positive Integer (HEX) **
+
+
 ## 4. Video Walkthrough
 
 WE APPEND OUR VIDEO.
