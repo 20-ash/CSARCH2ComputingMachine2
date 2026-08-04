@@ -404,6 +404,24 @@ export default function RoundPage() {
               return toFloat32Breakdown(0, mode, parsedTarget);
             }
 
+            const absVal = Math.abs(numericVal);
+            if (absVal > FLOAT32_MAX) {
+              const isNeg = isNegative || numericVal < 0;
+              const infSignBit: 0 | 1 = isNeg ? 1 : 0;
+
+              const breakdown = toFloat32Breakdown(isNeg ? -Infinity : Infinity, mode, parsedTarget);
+              breakdown.specialCase = "overflow";
+              breakdown.storedValue = isNeg ? -Infinity : Infinity;
+
+              if (typeof val === "object" && val !== null) {
+                if ("guardBit" in val) breakdown.roundBit = String(val.guardBit);
+                if ("stickyAny" in val) breakdown.stickyAny = Boolean(val.stickyAny);
+                if ("roundedUp" in val) breakdown.roundedUp = Boolean(val.roundedUp);
+              }
+
+              return breakdown;
+            }
+
             const breakdown = toFloat32Breakdown(numericVal, mode, parsedTarget);
 
             if (typeof val === "object" && val !== null) {
