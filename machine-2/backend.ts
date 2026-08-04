@@ -669,6 +669,7 @@ function truncateDec(input: number, targetDigits: number, rawStr?: string): Deci
 function roundUpBinary(binaryInput: FormattedBinaryInput, targetBits: number): ArithmeticBinaryResult {
     const truncated = truncateBinary(binaryInput, targetBits);
 
+    // negative binary values round to positive infinity via truncation (so no magnitude increment)
     if (binaryInput.signed && binaryInput.signBit === 1) {
         return truncated;
     }
@@ -680,6 +681,7 @@ function roundUpBinary(binaryInput: FormattedBinaryInput, targetBits: number): A
     const discardedBits = binaryInput.magnitude.slice(cutIndex);
     const hasNonZeroDiscarded = discardedBits.some(bit => bit === 1);
 
+    // increment magnitude if positive and non-zero bits were discarded
     if (hasNonZeroDiscarded) {
         const inc = incrementBinaryAtCut(binaryInput, targetBits);
         return {
@@ -694,9 +696,13 @@ function roundUpBinary(binaryInput: FormattedBinaryInput, targetBits: number): A
     return truncated;
 }
 
+// handles rounding up for decimal numbers
 function roundUpDec(input: number, targetDigits: number, rawStr?: string): DecimalResult {
     const truncated = truncateDec(input, targetDigits, rawStr);
-    if (input <= 0) return truncated;
+    
+    // negative decimal values round to positive infinity via truncation
+    if (input <= 0) 
+        return truncated;
 
     const { guardBit, stickyAny } = truncated;
     const hasDiscarded = guardBit !== 0 || stickyAny;
@@ -711,6 +717,8 @@ function roundUpDec(input: number, targetDigits: number, rawStr?: string): Decim
     const [intPart, fracPart = ''] = formattedInput.split('.');
 
     let valStr: string;
+
+    // increment kept portion for positive non-zero discarded tail
     if (absoluteInput >= 1) {
         if (intPart.length >= targetDigits) {
             const keep = intPart.slice(0, targetDigits);
@@ -740,12 +748,14 @@ function roundUpDec(input: number, targetDigits: number, rawStr?: string): Decim
 }
 
 // --------------------------------------------------
-// ROUND DOWN (RTN - Toward -Infinity)
-// --------------------------------------------------
+// ROUND DOWN (RTN) - round towards negative infinity
 
+
+// handles rounding down for binary numbers
 function roundDownBinary(binaryInput: FormattedBinaryInput, targetBits: number): ArithmeticBinaryResult {
     const truncated = truncateBinary(binaryInput, targetBits);
 
+    // positive binary values round to negative infinity via truncation
     if (!binaryInput.signed || binaryInput.signBit === 0) {
         return truncated;
     }
@@ -757,6 +767,7 @@ function roundDownBinary(binaryInput: FormattedBinaryInput, targetBits: number):
     const discardedBits = binaryInput.magnitude.slice(cutIndex);
     const hasNonZeroDiscarded = discardedBits.some(bit => bit === 1);
 
+    // increment negative magnitude if non-zero bits were discarded
     if (hasNonZeroDiscarded) {
         const inc = incrementBinaryAtCut(binaryInput, targetBits);
         return {
@@ -771,9 +782,13 @@ function roundDownBinary(binaryInput: FormattedBinaryInput, targetBits: number):
     return truncated;
 }
 
+// handles rounding down for decimal numbers
 function roundDownDec(input: number, targetDigits: number, rawStr?: string): DecimalResult {
     const truncated = truncateDec(input, targetDigits, rawStr);
-    if (input >= 0) return truncated;
+    
+    // positive decimal values round towards negative infinity via truncation
+    if (input >= 0) 
+        return truncated;
 
     const { guardBit, stickyAny } = truncated;
     const hasDiscarded = guardBit !== 0 || stickyAny;
@@ -788,6 +803,8 @@ function roundDownDec(input: number, targetDigits: number, rawStr?: string): Dec
     const [intPart, fracPart = ''] = formattedInput.split('.');
 
     let valStr: string;
+
+    // increment negative value magnitude if non-zero tail was discarded
     if (absoluteInput >= 1) {
         if (intPart.length >= targetDigits) {
             const keep = intPart.slice(0, targetDigits);
@@ -817,9 +834,9 @@ function roundDownDec(input: number, targetDigits: number, rawStr?: string): Dec
 }
 
 // --------------------------------------------------
-// ROUND TO NEAREST (RNE - Ties to Even)
-// --------------------------------------------------
+// ROUND TO NEAREST (RNE) - round to nearest, ties to even
 
+// handles round to nearest, ties to even for binary numbers
 function roundNearBinary(binaryInput: FormattedBinaryInput, targetBits: number): ArithmeticBinaryResult {
     const truncated = truncateBinary(binaryInput, targetBits);
     const { guardBit, stickyAny } = truncated;
@@ -833,12 +850,13 @@ function roundNearBinary(binaryInput: FormattedBinaryInput, targetBits: number):
 
     let shouldIncrement = false;
 
+    // determine rounding based on guard bit, sticky bit, and LSB
     if (guardBit === 1) {
         if (stickyAny) {
-            shouldIncrement = true;
+            shouldIncrement = true;         // strictly greater than midpoint
         } else {
             if (lsb === 1) {
-                shouldIncrement = true;
+                shouldIncrement = true;     // tied, round to nearest even (upper even)
             }
         }
     }
@@ -857,6 +875,7 @@ function roundNearBinary(binaryInput: FormattedBinaryInput, targetBits: number):
     return truncated;
 }
 
+// handles round-to-nearest ties-to-even for decimal numbers
 function roundNearDec(input: number, targetDigits: number, rawStr?: string): DecimalResult {
     const truncated = truncateDec(input, targetDigits, rawStr);
     if (input === 0) return truncated;
@@ -873,6 +892,7 @@ function roundNearDec(input: number, targetDigits: number, rawStr?: string): Dec
 
     let lastKeepDigit = 0;
 
+    // extract last kept digit (LSB) to evaluate the tie-breaking
     if (absoluteInput >= 1) {
         if (intPart.length >= targetDigits) {
             const keepStr = intPart.slice(0, targetDigits);
@@ -894,18 +914,20 @@ function roundNearDec(input: number, targetDigits: number, rawStr?: string): Dec
     const isNegative = input < 0;
     let shouldIncrement = false;
 
+    // determine rounding trigger based on guard digit, sticky status, and parity of last kept digit
     if (guardBit > 5) {
-        shouldIncrement = true;
+        shouldIncrement = true;                 // strictly greater than midpoint
     } else if (guardBit === 5) {
         if (stickyAny) {
-            shouldIncrement = true;
+            shouldIncrement = true;             // strictly greater than midpoint
         } else {
             if (lastKeepDigit % 2 !== 0) {
-                shouldIncrement = true;
+                shouldIncrement = true;         // tied, round to nearest even (upper even)
             }
         }
     }
 
+    // execute directional rounding based on sign if increment is triggered
     if (shouldIncrement) {
         const res = isNegative ? roundDownDec(input, targetDigits, rawStr) : roundUpDec(input, targetDigits, rawStr);
         return {
